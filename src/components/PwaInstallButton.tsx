@@ -67,29 +67,27 @@ export default function PwaInstallButton() {
   if (!isVisible) return null;
 
   return (
-    <div className="flex flex-col items-center justify-center mt-4 mb-16 px-4">
-      
-      {/* UI UNTUK ANDROID / CHROME (Tombol Sopan) */}
+    <div className="w-full sm:w-auto">
+      {/* UI UNTUK ANDROID / CHROME (Desain Menyatu dengan Hero) */}
       {!isIosPrompt && (
         <button 
           onClick={handleInstallClick}
-          className="flex items-center justify-center gap-2 bg-white text-gray-800 border-2 border-gray-200 px-6 py-3 rounded-xl font-bold hover:bg-gray-50 transition-colors shadow-sm w-full max-w-sm"
+          className="flex items-center justify-center gap-2 w-full sm:w-auto bg-white/10 text-white border border-white/20 px-8 py-3.5 rounded-full font-bold hover:bg-white/20 transition-all backdrop-blur-sm shadow-lg"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
           </svg>
-          Instal Aplikasi KulkasKuliner
+          Instal Aplikasi
         </button>
       )}
 
-      {/* UI UNTUK iOS / SAFARI (Kotak Instruksi Sopan) */}
+      {/* UI UNTUK iOS / SAFARI (Desain Transparan) */}
       {isIosPrompt && (
-        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl shadow-sm w-full max-w-sm text-center">
-          <h3 className="font-bold text-blue-900 text-sm mb-2">Akses Cepat KulkasKuliner</h3>
-          <p className="text-xs text-blue-800 leading-relaxed">
-            Instal di iPhone Anda:<br/>
-            1. Tekan tombol <strong className="inline-flex items-center gap-1 bg-white px-1 py-0.5 rounded shadow-sm mx-1"><svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg> Share</strong> di bawah.<br/>
-            2. Pilih menu <strong>➕ Add to Home Screen</strong>.
+        <div className="bg-white/10 border border-white/20 p-3 rounded-xl backdrop-blur-sm w-full sm:w-auto text-center text-white shadow-lg">
+          <p className="text-xs leading-relaxed">
+            <span className="font-bold text-yellow-400">Pengguna iPhone:</span><br/>
+            Tekan <strong className="inline-flex items-center gap-1 bg-white/20 px-1 py-0.5 rounded mx-1">Share</strong> di bawah,<br/>
+            lalu pilih <strong>➕ Add to Home Screen</strong>.
           </p>
         </div>
       )}

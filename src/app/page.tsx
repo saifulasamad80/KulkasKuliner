@@ -8,7 +8,6 @@ import PwaInstallButton from '@/components/PwaInstallButton';
 export const revalidate = 60;
 
 export default async function Home() {
-  // Menarik data katalog aktif
   const { data: products, error } = await supabase
     .from('products')
     .select('*')
@@ -27,7 +26,6 @@ export default async function Home() {
     );
   }
 
-  // RETURN MUTLAK: Satu Parent Element (<main>)
   return (
     <main className="min-h-screen bg-gray-50 relative">
       
@@ -49,9 +47,16 @@ export default async function Home() {
           <p className="text-lg md:text-xl font-medium text-blue-100 max-w-2xl mx-auto mb-8 drop-shadow">
             Distributor Frozen Food Premium & Praktis. Solusi bekal keluarga dan stok dapur harian Anda.
           </p>
-          <a href="#katalog" className="inline-block bg-yellow-400 text-blue-900 font-black px-8 py-3.5 rounded-full hover:bg-yellow-300 transition-colors shadow-lg transform hover:scale-105 duration-200">
-            LIHAT KATALOG
-          </a>
+          
+          {/* RESOLUSI UX: Menggabungkan Tombol Katalog & PWA di Layar Pertama */}
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-8">
+            <a href="#katalog" className="inline-block bg-yellow-400 text-blue-900 font-black px-8 py-3.5 rounded-full hover:bg-yellow-300 transition-colors shadow-lg transform hover:scale-105 duration-200 w-full sm:w-auto">
+              LIHAT KATALOG
+            </a>
+            
+            <PwaInstallButton />
+          </div>
+
         </div>
       </section>
 
@@ -78,10 +83,6 @@ export default async function Home() {
         )}
       </section>
 
-      {/* TOMBOL PWA SOPAN */}
-      <PwaInstallButton />
-
-      {/* KERANJANG MENGAMBANG */}
       <FloatingCart />
       
     </main>
