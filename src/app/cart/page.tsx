@@ -65,6 +65,7 @@ export default function CartPage() {
     setIsLoading(true);
 
     try {
+      // 1. Proses transaksi ke database pesanan
       const { data: orderNumber, error } = await supabase.rpc('process_checkout', {
         c_name: formData.name,
         c_phone: formData.phone,
@@ -74,7 +75,20 @@ export default function CartPage() {
 
       if (error) throw new Error(error.message);
 
-      const adminPhone = "628889560447"; 
+      // 2. RESOLUSI DINAMIS: Tarik Nomor WA dari tabel store_settings
+      let adminPhone = "628889560447"; // Nomor default/darurat jika database sedang gangguan
+      
+      const { data: waData, error: waError } = await supabase
+        .from('store_settings')
+        .select('setting_value')
+        .eq('setting_key', 'admin_wa_number')
+        .single();
+        
+      if (waData && !waError && waData.setting_value) {
+         adminPhone = waData.setting_value; // Timpa nomor default dengan nomor dari DB
+      }
+
+      // 3. Merakit pesan dan mengarahkan pengguna
       const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya.\n\n*ORDER ID: ${orderNumber}*\n\nMohon cek sistem untuk detail alamat saya, dan infokan ongkos kirim Instan/Sameday beserta total transfer.\n\nTerima kasih.`;
       
       const waUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
@@ -151,7 +165,6 @@ export default function CartPage() {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit">
           <h2 className="text-xl font-bold text-gray-800 mb-5">Detail Pengiriman</h2>
           <form onSubmit={handleCheckout} className="space-y-4">
-            {/* RESOLUSI DARK MODE BUGS: Penambahan text-gray-900 bg-white placeholder-gray-400 secara eksplisit */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Nama Penerima</label>
               <input type="text" required 
