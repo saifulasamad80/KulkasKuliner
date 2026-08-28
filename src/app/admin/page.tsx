@@ -1,23 +1,56 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAdminData } from '@/hooks/useAdminData';
 
+// RESOLUSI KEAMANAN: Hardcoded PIN (Ganti dengan PIN rahasia lu nanti!)
+const ADMIN_SECRET_PIN = "808080"; 
+
 export default function AdminDashboard() {
-  // SEDOT DATA DARI HOOK: Logic terpisah 100% dari UI
+  // STATE AUTENTIKASI DARURAT
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // LOGIC ADMIN DATA (Disembunyikan di balik gerbang)
   const { 
     orders, products, totalRevenue, isLoading, 
     fetchData, updateOrderStatus, toggleProductActive 
   } = useAdminData();
   
-  // State UI Lokal
   const [isAdding, setIsAdding] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: '', price: 0, stock: 0, image_url: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '' });
 
+  // CEK SESI SAAT HALAMAN DIMUAT
+  useEffect(() => {
+    const savedSession = localStorage.getItem('kuliner_admin_auth');
+    if (savedSession === "authenticated") {
+      setIsAuthenticated(true);
+    }
+    setIsCheckingAuth(false);
+  }, []);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinInput === ADMIN_SECRET_PIN) {
+      localStorage.setItem('kuliner_admin_auth', 'authenticated');
+      setIsAuthenticated(true);
+    } else {
+      alert("PIN Akses Ditolak!");
+      setPinInput("");
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('kuliner_admin_auth');
+    setIsAuthenticated(false);
+  };
+
+  // FUNGSI ADMIN EXISTINGS...
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProduct.name || newProduct.price <= 0) return alert("Nama dan Harga wajib diisi valid!");
@@ -32,21 +65,57 @@ export default function AdminDashboard() {
     else { setEditingId(null); fetchData(); }
   };
 
-  if (isLoading) return <div className="p-10 text-center font-bold text-xl">Memuat Dashboard...</div>;
+  // SCREENING 1: Loading Cek Sesi
+  if (isCheckingAuth) return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-white">Verifikasi Keamanan...</p></div>;
+
+  // SCREENING 2: Gerbang Login Terkunci (Tarpitting)
+  if (!isAuthenticated) {
+    return (
+      <main className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full border-t-8 border-red-600">
+          <h1 className="text-2xl font-black text-gray-900 mb-2 text-center">Area Terlarang</h1>
+          <p className="text-sm text-gray-500 mb-6 text-center">Masukkan PIN Operasional untuk mengakses Dashboard KulkasKuliner.</p>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input 
+              type="password" 
+              placeholder="Masukkan PIN" 
+              required
+              className="w-full text-center tracking-[1em] font-black text-2xl p-4 border-2 border-gray-300 rounded-xl focus:border-red-600 focus:ring-0 outline-none"
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value)}
+            />
+            <button type="submit" className="w-full bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition-colors shadow-lg">
+              Akses Sistem
+            </button>
+          </form>
+          <div className="mt-6 text-center">
+            <Link href="/" className="text-sm text-blue-600 font-semibold hover:underline">← Kembali ke Halaman Publik</Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // SCREENING 3: Tampilan Dashboard (Jika Lolos)
+  if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-xl text-gray-500">Memuat Data Dashboard...</div>;
 
   return (
     <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-50">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-gray-300 pb-4 gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900">Dashboard Admin</h1>
+          <h1 className="text-3xl font-extrabold text-gray-900 flex items-center gap-2">
+            Dashboard Admin 
+            <span className="bg-red-100 text-red-600 text-[10px] uppercase px-2 py-0.5 rounded-full border border-red-200">Secured</span>
+          </h1>
           <p className="text-gray-500 mt-1">Sistem Manajemen KulkasKuliner</p>
         </div>
-        <div className="flex items-center gap-4 w-full md:w-auto">
+        <div className="flex items-center flex-wrap gap-4 w-full md:w-auto">
           <div className="bg-green-100 border border-green-300 px-5 py-2 rounded-lg flex-1 md:flex-none text-right shadow-sm">
             <span className="block text-xs font-bold text-green-700 uppercase tracking-wider mb-0.5">Total Pendapatan</span>
             <span className="block text-xl font-black text-green-800">Rp {totalRevenue.toLocaleString('id-ID')}</span>
           </div>
-          <Link href="/" className="bg-gray-800 text-white px-5 py-3 rounded-lg font-bold hover:bg-gray-900 transition-colors shadow-sm text-center">Lihat Publik</Link>
+          <Link href="/" className="bg-gray-800 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-gray-900 transition-colors shadow-sm text-center">Lihat Publik</Link>
+          <button onClick={handleLogout} className="bg-red-100 text-red-700 border border-red-300 px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-red-200 transition-colors shadow-sm text-center">Kunci Keluar</button>
         </div>
       </div>
 
@@ -61,7 +130,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* FORM TAMBAH PRODUK (Dark Mode Override) */}
+          {/* FORM TAMBAH PRODUK */}
           {isAdding && (
             <form onSubmit={handleAddProduct} className="mb-6 bg-green-50 p-4 border border-green-200 rounded-lg space-y-3 shadow-inner">
               <input type="text" placeholder="Nama Produk" required 
@@ -78,7 +147,7 @@ export default function AdminDashboard() {
                   value={newProduct.stock || ''} onChange={e => setNewProduct({...newProduct, stock: parseInt(e.target.value)})} 
                 />
               </div>
-              <input type="url" placeholder="URL Foto (opsional)" 
+              <input type="url" placeholder="URL Foto Absolut (Raw GitHub)" 
                 className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
                 value={newProduct.image_url} onChange={e => setNewProduct({...newProduct, image_url: e.target.value})} 
               />
@@ -90,7 +159,7 @@ export default function AdminDashboard() {
             {products.map((prod) => (
               <div key={prod.id} className={`p-4 border rounded-xl flex flex-col gap-3 transition-colors ${!prod.is_active ? 'bg-gray-100 opacity-70' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
                 
-                {/* FORM EDIT PRODUK (Dark Mode Override) */}
+                {/* FORM EDIT PRODUK */}
                 {editingId === prod.id ? (
                   <div className="space-y-2 bg-blue-50/50 p-2 -mx-2 rounded-lg">
                     <input type="text" placeholder="Nama Produk"
@@ -107,7 +176,7 @@ export default function AdminDashboard() {
                         value={editForm.stock} onChange={e => setEditForm({...editForm, stock: parseInt(e.target.value)})} 
                       />
                     </div>
-                    <input type="text" placeholder="URL Foto" 
+                    <input type="text" placeholder="URL Foto Absolut" 
                       className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editForm.image_url} onChange={e => setEditForm({...editForm, image_url: e.target.value})} 
                     />
