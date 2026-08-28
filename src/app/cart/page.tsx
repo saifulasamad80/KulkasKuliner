@@ -6,7 +6,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 export default function CartPage() {
-  // RESOLUSI INFINITE LOOP: Memanggil seluruh fungsi murni dari store, tanpa membuat objek baru
   const { items, increaseQty, decreaseQty, removeItem, clearCart, decreaseItemToMaxStock } = useCartStore();
 
   const [isClient, setIsClient] = useState(false);
@@ -23,7 +22,6 @@ export default function CartPage() {
     setIsClient(true);
     
     const syncCartWithDB = async () => {
-      // Kita ambil current snapshot sekali saja untuk menghindari stale closure
       const currentItems = useCartStore.getState().items;
       const itemIds = currentItems.map(i => i.id);
       
@@ -56,7 +54,7 @@ export default function CartPage() {
     };
 
     syncCartWithDB();
-  }, []); // Array kosong memastikan hanya jalan sekali saat halaman dimuat
+  }, []);
 
   if (!isClient) return null;
 
@@ -130,7 +128,7 @@ export default function CartPage() {
               </div>
               <div className="flex items-center gap-3">
                 <button onClick={() => decreaseQty(item.id)} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
-                <span className="font-bold w-4 text-center">{item.quantity}</span>
+                <span className="font-bold w-4 text-center text-gray-900">{item.quantity}</span>
                 <button onClick={() => increaseQty(item.id)} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">+</button>
                 <button onClick={() => removeItem(item.id)} className="ml-2 text-red-500 hover:text-red-700 p-2">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -153,27 +151,33 @@ export default function CartPage() {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit">
           <h2 className="text-xl font-bold text-gray-800 mb-5">Detail Pengiriman</h2>
           <form onSubmit={handleCheckout} className="space-y-4">
+            {/* RESOLUSI DARK MODE BUGS: Penambahan text-gray-900 bg-white placeholder-gray-400 secara eksplisit */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Nama Penerima</label>
-              <input type="text" required className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" 
+              <input type="text" required 
+                className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" 
                 value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})}
+                placeholder="Nama Anda"
               />
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">No. WhatsApp</label>
-              <input type="tel" required className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" 
+              <input type="tel" required 
+                className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" 
                 value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                placeholder="08123456789"
               />
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Alamat Lengkap (Titik Pengiriman)</label>
-              <textarea required rows={3} className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" 
+              <textarea required rows={3} 
+                className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" 
                 value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})}
                 placeholder="Contoh: Jl. Raya X No. 123, Kelurahan, Kecamatan, Patokan..."
               />
             </div>
 
-            <button type="submit" disabled={isLoading} className="w-full bg-green-600 text-white font-bold py-3.5 rounded-lg mt-4 hover:bg-green-700 transition-colors flex justify-center items-center gap-2">
+            <button type="submit" disabled={isLoading} className="w-full bg-green-600 text-white font-bold py-3.5 rounded-lg mt-4 hover:bg-green-700 transition-colors flex justify-center items-center gap-2 shadow-md">
               {isLoading ? (
                 <span>Memproses Pesanan...</span>
               ) : (
