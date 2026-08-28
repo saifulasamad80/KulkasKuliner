@@ -21,7 +21,6 @@ export default function AdminDashboard() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '' });
 
-  // RESOLUSI KEAMANAN PARANOID: Menggunakan sessionStorage (Hilang saat tab ditutup)
   useEffect(() => {
     const savedSession = sessionStorage.getItem('kuliner_admin_auth');
     if (savedSession === "authenticated") {
@@ -225,63 +224,65 @@ export default function AdminDashboard() {
                   </>
                 )}
               </div>
-            </div>
+            ))}
+          </div>
+        </div>
 
-            {/* KOLOM KANAN: PESANAN */}
-            <div className="lg:col-span-7 space-y-5">
-              <h2 className="text-xl font-bold text-gray-800 mb-2">Antrean Pesanan Masuk</h2>
-              {orders.length === 0 ? (
-                 <div className="bg-white p-12 text-center rounded-xl shadow-sm border border-gray-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                    </svg>
-                    <p className="text-gray-500 font-medium">Belum ada pesanan masuk hari ini.</p>
-                 </div>
-              ) : (
-                orders.map((order) => (
-                   <div key={order.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col md:flex-row transition-all hover:shadow-md">
-                    <div className="p-5 md:w-2/5 border-b md:border-b-0 md:border-r border-gray-200 bg-gray-50/50">
-                      <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2.5 py-1 rounded block w-fit mb-3 tracking-wider">{order.order_number}</span>
-                      <h2 className="text-base font-bold text-gray-900 leading-tight">{order.customer_name}</h2>
-                      <p className="text-sm font-semibold text-gray-600 mt-1 flex items-center gap-1.5">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
-                        {order.customer_phone}
-                      </p>
-                      <div className="mt-4 text-xs text-gray-700 bg-white p-3 border border-gray-100 rounded-lg shadow-sm">
-                        <span className="block font-black text-[10px] text-gray-400 mb-1">ALAMAT PENGIRIMAN:</span>
-                        {order.shipping_address}
-                      </div>
-                    </div>
-                    <div className="p-5 md:w-3/5 flex flex-col justify-between">
-                      <div>
-                        <ul className="space-y-2 mb-4">
-                          {order.order_items.map((item) => (
-                            <li key={item.id} className="flex justify-between items-start text-sm">
-                              <span className="font-medium text-gray-800 pr-4"><span className="font-bold text-blue-600">{item.quantity}x</span> {item.products?.name}</span>
-                              <span className="font-bold text-gray-900 whitespace-nowrap">Rp {(item.quantity * item.price_at_time).toLocaleString('id-ID')}</span>
-                            </li>
-                          ))}
-                        </ul>
-                        <div className="flex justify-between items-center pt-3 border-t border-dashed border-gray-300">
-                          <span className="font-bold text-gray-500 text-sm tracking-wide">TOTAL TAGIHAN</span>
-                          <span className="text-lg font-black text-blue-700">Rp {order.total_amount.toLocaleString('id-ID')}</span>
-                        </div>
-                      </div>
-                      <div className="mt-5 bg-gray-50/80 p-3 rounded-lg border border-gray-100 flex flex-wrap items-center justify-between gap-3">
-                        <span className={`px-2.5 py-1.5 rounded text-[10px] font-black uppercase tracking-wider shadow-sm ${ order.status === 'unpaid' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : order.status === 'canceled' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-green-100 text-green-800 border border-green-200' }`}>
-                          {order.status}
-                        </span>
-                        <div className="flex gap-2">
-                          {order.status === 'unpaid' && ( <button onClick={() => updateOrderStatus(order.id, 'paid')} className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm focus:ring-2 focus:ring-blue-400 outline-none">Set Lunas</button> )}
-                          {order.status !== 'canceled' && order.status !== 'completed' && ( <button onClick={() => updateOrderStatus(order.id, 'canceled')} className="bg-white text-red-600 border border-red-200 px-4 py-1.5 rounded text-xs font-bold hover:bg-red-50 transition-colors shadow-sm focus:ring-2 focus:ring-red-400 outline-none">Batalkan</button> )}
-                        </div>
-                      </div>
+        {/* KOLOM KANAN: PESANAN */}
+        <div className="lg:col-span-7 space-y-5">
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Antrean Pesanan Masuk</h2>
+          {orders.length === 0 ? (
+             <div className="bg-white p-12 text-center rounded-xl shadow-sm border border-gray-200">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                <p className="text-gray-500 font-medium">Belum ada pesanan masuk hari ini.</p>
+             </div>
+          ) : (
+            orders.map((order) => (
+               <div key={order.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col md:flex-row transition-all hover:shadow-md">
+                <div className="p-5 md:w-2/5 border-b md:border-b-0 md:border-r border-gray-200 bg-gray-50/50">
+                  <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2.5 py-1 rounded block w-fit mb-3 tracking-wider">{order.order_number}</span>
+                  <h2 className="text-base font-bold text-gray-900 leading-tight">{order.customer_name}</h2>
+                  <p className="text-sm font-semibold text-gray-600 mt-1 flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                    {order.customer_phone}
+                  </p>
+                  <div className="mt-4 text-xs text-gray-700 bg-white p-3 border border-gray-100 rounded-lg shadow-sm">
+                    <span className="block font-black text-[10px] text-gray-400 mb-1">ALAMAT PENGIRIMAN:</span>
+                    {order.shipping_address}
+                  </div>
+                </div>
+                <div className="p-5 md:w-3/5 flex flex-col justify-between">
+                  <div>
+                    <ul className="space-y-2 mb-4">
+                      {order.order_items.map((item) => (
+                        <li key={item.id} className="flex justify-between items-start text-sm">
+                          <span className="font-medium text-gray-800 pr-4"><span className="font-bold text-blue-600">{item.quantity}x</span> {item.products?.name}</span>
+                          <span className="font-bold text-gray-900 whitespace-nowrap">Rp {(item.quantity * item.price_at_time).toLocaleString('id-ID')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="flex justify-between items-center pt-3 border-t border-dashed border-gray-300">
+                      <span className="font-bold text-gray-500 text-sm tracking-wide">TOTAL TAGIHAN</span>
+                      <span className="text-lg font-black text-blue-700">Rp {order.total_amount.toLocaleString('id-ID')}</span>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        </main>
-      );
-    }
+                  <div className="mt-5 bg-gray-50/80 p-3 rounded-lg border border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                    <span className={`px-2.5 py-1.5 rounded text-[10px] font-black uppercase tracking-wider shadow-sm ${ order.status === 'unpaid' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : order.status === 'canceled' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-green-100 text-green-800 border border-green-200' }`}>
+                      {order.status}
+                    </span>
+                    <div className="flex gap-2">
+                      {order.status === 'unpaid' && ( <button onClick={() => updateOrderStatus(order.id, 'paid')} className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm focus:ring-2 focus:ring-blue-400 outline-none">Set Lunas</button> )}
+                      {order.status !== 'canceled' && order.status !== 'completed' && ( <button onClick={() => updateOrderStatus(order.id, 'canceled')} className="bg-white text-red-600 border border-red-200 px-4 py-1.5 rounded text-xs font-bold hover:bg-red-50 transition-colors shadow-sm focus:ring-2 focus:ring-red-400 outline-none">Batalkan</button> )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
