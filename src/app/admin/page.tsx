@@ -5,16 +5,14 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAdminData } from '@/hooks/useAdminData';
 
-// RESOLUSI KEAMANAN: Hardcoded PIN (Ganti dengan PIN rahasia lu nanti!)
-const ADMIN_SECRET_PIN = "808080"; 
-
 export default function AdminDashboard() {
   // STATE AUTENTIKASI DARURAT
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  // LOGIC ADMIN DATA (Disembunyikan di balik gerbang)
+  // LOGIC ADMIN DATA
   const { 
     orders, products, totalRevenue, isLoading, 
     fetchData, updateOrderStatus, toggleProductActive 
@@ -34,14 +32,35 @@ export default function AdminDashboard() {
     setIsCheckingAuth(false);
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  // FUNGSI LOGIN (TARIK PIN DARI SUPABASE)
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinInput === ADMIN_SECRET_PIN) {
-      localStorage.setItem('kuliner_admin_auth', 'authenticated');
-      setIsAuthenticated(true);
-    } else {
-      alert("PIN Akses Ditolak!");
-      setPinInput("");
+    setIsVerifying(true);
+
+    try {
+      // Panggil PIN rahasia dari tabel store_settings
+      const { data, error } = await supabase
+        .from('store_settings')
+        .select('setting_value')
+        .eq('setting_key', 'admin_secret_pin')
+        .single();
+
+      if (error || !data) {
+        throw new Error("Gagal terhubung ke server keamanan.");
+      }
+
+      if (pinInput === data.setting_value) {
+        localStorage.setItem('kuliner_admin_auth', 'authenticated');
+        setIsAuthenticated(true);
+      } else {
+        alert("PIN Akses Ditolak!");
+        setPinInput("");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Kesalahan sistem. Pastikan key 'admin_secret_pin' ada di tabel store_settings.");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -80,12 +99,19 @@ export default function AdminDashboard() {
               type="password" 
               placeholder="Masukkan PIN" 
               required
-              className="w-full text-center tracking-[1em] font-black text-2xl p-4 border-2 border-gray-300 rounded-xl focus:border-red-600 focus:ring-0 outline-none"
+              disabled={isVerifying}
+              className="w-full text-center tracking-[1em] font-black text-2xl p-4 border-2 border-gray-300 rounded-xl focus:border-red-600 focus:ring-0 outline-none disabled:bg-gray-100 disabled:opacity-50"
               value={pinInput}
               onChange={(e) => setPinInput(e.target.value)}
             />
-            <button type="submit" className="w-full bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition-colors shadow-lg">
-              Akses Sistem
+            <button 
+              type="submit" 
+              disabled={isVerifying}
+              className="w-full bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition-colors shadow-lg disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              {isVerifying ? (
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              ) : "Akses Sistem"}
             </button>
           </form>
           <div className="mt-6 text-center">
