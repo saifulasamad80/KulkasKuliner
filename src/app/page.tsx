@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import ProductCard from '@/components/ProductCard';
 import FloatingCart from '@/components/FloatingCart';
+import Link from 'next/link';
 
 // RESOLUSI PRF-01: Incremental Static Regeneration (Cache 60 Detik)
 export const revalidate = 60;
@@ -10,7 +11,7 @@ export default async function Home() {
   const { data: products, error } = await supabase
     .from('products')
     .select('*')
-    .eq('is_active', true) // <-- INI ADALAH GEMBOKNYA. Jangan pernah dihapus.
+    .eq('is_active', true) 
     .order('name', { ascending: true });
 
   if (error) {
@@ -26,13 +27,22 @@ export default async function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-gray-50 relative">
+      
+      {/* PINTU RAHASIA ADMIN (Dikembalikan ke posisinya) */}
+      <Link 
+        href="/admin" 
+        className="absolute top-4 right-4 z-50 bg-black/30 hover:bg-black/50 backdrop-blur-sm text-white/80 hover:text-white px-3 py-1.5 rounded text-xs font-bold transition-all border border-white/20"
+      >
+        Login Admin
+      </Link>
+
       {/* HERO SECTION */}
       <section className="bg-blue-900 text-white relative overflow-hidden">
         <div className="absolute inset-0 opacity-20">
            <img src="/kulkul.jpeg" alt="Background" className="w-full h-full object-cover" />
         </div>
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center mt-8 md:mt-0">
           <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight drop-shadow-md">KulkasKuliner Jakarta Timur</h1>
           <p className="text-lg md:text-xl font-medium text-blue-100 max-w-2xl mx-auto mb-8 drop-shadow">
             Distributor Frozen Food Premium & Praktis. Solusi bekal keluarga dan stok dapur harian Anda.
