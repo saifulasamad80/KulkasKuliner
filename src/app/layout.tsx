@@ -12,11 +12,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// RESOLUSI MUTLAK: Menggunakan metadataBase & Absolute URL agar Bot WhatsApp tidak buta
 export const metadata: Metadata = {
   metadataBase: new URL('https://kulkaskuliner.vercel.app'),
   title: "KulkasKuliner | Agen Frozen Food Premium Jakarta Timur",
   description: "Distributor Frozen Food Premium & Praktis. Solusi bekal keluarga dan stok dapur harian Anda. Pesan sekarang, kurir instan langsung jalan!",
+  // Pemanggilan Manifest PWA
+  manifest: "/manifest.json",
   openGraph: {
     title: "KulkasKuliner Jakarta Timur",
     description: "Sedia Pempek, Durian, Bebek Bumbu Hitam, dan aneka Frozen Food premium. Siap antar Instan/Sameday!",
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
     siteName: "KulkasKuliner",
     images: [
       {
-        url: "https://kulkaskuliner.vercel.app/kulkul.jpeg", // ABSOLUTE URL
+        url: "https://kulkaskuliner.vercel.app/kulkul.jpeg",
         width: 1200,
         height: 630,
         alt: "Katalog KulkasKuliner",
@@ -37,7 +38,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "KulkasKuliner Jakarta Timur",
     description: "Sedia aneka Frozen Food premium. Siap antar Instan!",
-    images: ["https://kulkaskuliner.vercel.app/kulkul.jpeg"], // ABSOLUTE URL
+    images: ["https://kulkaskuliner.vercel.app/kulkul.jpeg"],
   },
 };
 
@@ -51,7 +52,29 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        
+        {/* Registrasi Service Worker PWA secara asinkronus */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').then(
+                    function(registration) {
+                      console.log('PWA ServiceWorker berhasil diregistrasi dengan scope: ', registration.scope);
+                    },
+                    function(err) {
+                      console.log('PWA ServiceWorker gagal diregistrasi: ', err);
+                    }
+                  );
+                });
+              }
+            `,
+          }}
+        />
+      </body>
     </html>
   );
 }
