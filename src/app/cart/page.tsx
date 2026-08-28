@@ -12,10 +12,12 @@ export default function CartPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [syncingStock, setSyncingStock] = useState(true);
   
+  // RESOLUSI UX: Penambahan state 'notes' untuk catatan pembeli
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    address: ''
+    address: '',
+    notes: '' 
   });
 
   useEffect(() => {
@@ -65,7 +67,6 @@ export default function CartPage() {
     setIsLoading(true);
 
     try {
-      // 1. Proses transaksi ke database pesanan
       const { data: orderNumber, error } = await supabase.rpc('process_checkout', {
         c_name: formData.name,
         c_phone: formData.phone,
@@ -75,8 +76,7 @@ export default function CartPage() {
 
       if (error) throw new Error(error.message);
 
-      // 2. RESOLUSI DINAMIS: Tarik Nomor WA dari tabel store_settings
-      let adminPhone = "628889560447"; // Nomor default/darurat jika database sedang gangguan
+      let adminPhone = "628889560447"; 
       
       const { data: waData, error: waError } = await supabase
         .from('store_settings')
@@ -85,11 +85,17 @@ export default function CartPage() {
         .single();
         
       if (waData && !waError && waData.setting_value) {
-         adminPhone = waData.setting_value; // Timpa nomor default dengan nomor dari DB
+         adminPhone = waData.setting_value; 
       }
 
-      // 3. Merakit pesan dan mengarahkan pengguna
-      const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya.\n\n*ORDER ID: ${orderNumber}*\n\nMohon cek sistem untuk detail alamat saya, dan infokan ongkos kirim Instan/Sameday beserta total transfer.\n\nTerima kasih.`;
+      // Merakit struk pesanan barang
+      const orderDetails = items.map(item => `- ${item.quantity}x ${item.name} (Rp ${(item.price * item.quantity).toLocaleString('id-ID')})`).join('\n');
+      
+      // Merakit format catatan (jika ada)
+      const notesSection = formData.notes.trim() !== '' ? `\n\n*Catatan Tambahan:*\n_${formData.notes}_` : '';
+
+      // RESOLUSI WHATSAPP: Format pesan yang lebih detail
+      const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya.\n\n*ORDER ID: ${orderNumber}*\n\n*Pesanan:*\n${orderDetails}\n\n*Total Belanja:* Rp ${totalAmount.toLocaleString('id-ID')}${notesSection}\n\nMohon cek sistem untuk detail alamat saya, dan infokan ongkos kirim Instan/Sameday beserta total transfer.\n\nTerima kasih.`;
       
       const waUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
 
@@ -182,11 +188,21 @@ export default function CartPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Alamat Lengkap (Titik Pengiriman)</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Alamat Lengkap</label>
               <textarea required rows={3} 
                 className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" 
                 value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})}
-                placeholder="Contoh: Jl. Raya X No. 123, Kelurahan, Kecamatan, Patokan..."
+                placeholder="Contoh: Jl. Raya X No. 123, Patokan..."
+              />
+            </div>
+            
+            {/* RESOLUSI UX: Kolom Catatan Opsional */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Catatan Tambahan <span className="text-gray-400 font-normal">(Opsional)</span></label>
+              <input type="text" 
+                className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" 
+                value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                placeholder="Contoh: Tolong pilihkan durian yang manis"
               />
             </div>
 
