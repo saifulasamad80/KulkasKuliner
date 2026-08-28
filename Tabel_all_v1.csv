@@ -1,0 +1,22 @@
+Nama Tabel,Kolom,Tipe Data,Boleh Kosong?,Nilai Default
+order_items,id,uuid,NO,gen_random_uuid()
+order_items,order_id,uuid,YES,null
+order_items,product_id,uuid,YES,null
+order_items,quantity,integer,NO,null
+order_items,price_at_time,numeric,NO,null
+order_items,created_at,timestamp with time zone,YES,now()
+orders,id,uuid,NO,gen_random_uuid()
+orders,order_number,text,NO,null
+orders,customer_name,text,NO,null
+orders,customer_phone,text,NO,null
+orders,shipping_address,text,NO,null
+orders,total_amount,numeric,NO,0
+orders,status,text,NO,'unpaid'::text
+orders,created_at,timestamp with time zone,YES,now()
+products,id,uuid,NO,gen_random_uuid()
+products,name,text,NO,null
+products,price,numeric,NO,null
+products,stock,integer,NO,null
+products,is_active,boolean,YES,true
+products,created_at,timestamp with time zone,YES,now()
+products,image_url,text,YES,'https://images.unsplash.com/photo-1606851094655-b25cb8a48b59?w=500&q=80'::text

@@ -6,11 +6,27 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 export default function CartPage() {
-  const { items, increaseQty, decreaseQty, removeItem, clearCart } = useCartStore();
+  const { items, increaseQty, decreaseQty, removeItem, clearCart, decreaseItemToMaxStock } = useCartStore(state => ({
+    items: state.items,
+    increaseQty: state.increaseQty,
+    decreaseQty: state.decreaseQty,
+    removeItem: state.removeItem,
+    clearCart: state.clearCart,
+    decreaseItemToMaxStock: (id: string, maxStock: number) => {
+      const stateItems = useCartStore.getState().items;
+      const targetItem = stateItems.find(i => i.id === id);
+      if (targetItem && targetItem.quantity > maxStock) {
+        useCartStore.setState({
+          items: stateItems.map(item => item.id === id ? { ...item, quantity: maxStock } : item)
+        });
+      }
+    }
+  }));
+
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [syncingStock, setSyncingStock] = useState(true);
   
-  // State Form Pembeli
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -19,6 +35,44 @@ export default function CartPage() {
 
   useEffect(() => {
     setIsClient(true);
+    
+    const syncCartWithDB = async () => {
+      const currentItems = useCartStore.getState().items;
+      const itemIds = currentItems.map(i => i.id);
+      
+      if(itemIds.length === 0) {
+        setSyncingStock(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, stock, name')
+        .in('id', itemIds);
+
+      if (data && !error) {
+        let stockChanged = false;
+        
+        data.forEach(dbItem => {
+          const cartItem = currentItems.find(ci => ci.id === dbItem.id);
+          
+          if (cartItem) {
+            if (dbItem.stock === 0) {
+               removeItem(cartItem.id);
+               alert(`Maaf, ${dbItem.name} baru saja habis dibeli orang lain dan telah dihapus dari keranjang Anda.`);
+               stockChanged = true;
+            } else if (cartItem.quantity > dbItem.stock) {
+               decreaseItemToMaxStock(cartItem.id, dbItem.stock);
+               alert(`Stok ${dbItem.name} menurun. Kuantitas pesanan Anda disesuaikan menjadi sisa stok (${dbItem.stock}).`);
+               stockChanged = true;
+            }
+          }
+        });
+      }
+      setSyncingStock(false);
+    };
+
+    syncCartWithDB();
   }, []);
 
   if (!isClient) return null;
@@ -30,8 +84,7 @@ export default function CartPage() {
     setIsLoading(true);
 
     try {
-      // 1. Eksekusi Stored Procedure (RPC) di PostgreSQL
-      // Ini mengamankan transaksi, memotong stok, dan menolak manipulasi harga dari browser.
+      // 1. Eksekusi Stored Procedure (Data sensitif dikunci ke dalam DB)
       const { data: orderNumber, error } = await supabase.rpc('process_checkout', {
         c_name: formData.name,
         c_phone: formData.phone,
@@ -39,34 +92,39 @@ export default function CartPage() {
         items: items.map(item => ({ p_id: item.id, qty: item.quantity }))
       });
 
-      if (error) {
-        throw new Error(error.message);
-      }
+      if (error) throw new Error(error.message);
 
-      // 2. Format Pesan WhatsApp Anti-Tampering (Wajib Bawa Order ID)
-      const adminPhone = "628889560447"; // GANTI DENGAN NOMOR WA ADMIN KULKASKULINER LU
-      const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya.\n\n*ORDER ID: ${orderNumber}*\n\n*Nama:* ${formData.name}\n*Alamat:* ${formData.address}\n\nMohon info ongkos kirim ke alamat di atas dan total transfer.\n\nTerima kasih.`;
+      // RESOLUSI CMP-01: Data Minimization pada Payload URL
+      // PII (Nama, Alamat, No HP) DIBUANG dari string pesan agar tidak terekam di riwayat browser.
+      const adminPhone = "628889560447"; 
+      const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya.\n\n*ORDER ID: ${orderNumber}*\n\nMohon cek sistem untuk detail alamat saya, dan infokan ongkos kirim Instan/Sameday beserta total transfer.\n\nTerima kasih.`;
       
       const waUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
 
-      // 3. Bersihkan Keranjang setelah data sukses masuk database
       clearCart();
-
-      // 4. Redirect pelanggan ke WhatsApp
       window.location.href = waUrl;
 
     } catch (error: any) {
-      alert(`GAGAL CHECKOUT: ${error.message}\nKemungkinan stok barang sudah habis dibeli orang lain saat Anda di halaman ini.`);
+      console.error("Kesalahan Transaksi Internal:", error.message);
+      alert('Maaf, transaksi gagal diproses oleh sistem keamanan kami. Kemungkinan besar stok barang telah habis dibeli pelanggan lain. Silakan periksa kembali keranjang Anda.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  if (syncingStock) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <h1 className="text-xl font-bold text-gray-600 animate-pulse">Menyinkronkan stok gudang...</h1>
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
         <h1 className="text-2xl font-bold text-gray-800 mb-4">Keranjang Belanja Kosong</h1>
-        <Link href="/" className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700">
+        <Link href="/#katalog" className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700">
           Kembali ke Katalog
         </Link>
       </div>
@@ -77,13 +135,12 @@ export default function CartPage() {
     <main className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-50">
       <div className="flex items-center justify-between mb-8 border-b border-gray-200 pb-4">
         <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Keranjang Belanja</h1>
-        <Link href="/" className="text-blue-600 font-semibold hover:underline">
+        <Link href="/#katalog" className="text-blue-600 font-semibold hover:underline">
           &larr; Lanjut Belanja
         </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Kolom Daftar Barang */}
         <div className="space-y-4">
           {items.map((item) => (
             <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
@@ -113,7 +170,6 @@ export default function CartPage() {
           </div>
         </div>
 
-        {/* Kolom Form Pengiriman */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit">
           <h2 className="text-xl font-bold text-gray-800 mb-5">Detail Pengiriman</h2>
           <form onSubmit={handleCheckout} className="space-y-4">

@@ -1,0 +1,3 @@
+Tabel Asal,Kolom Asal (Yang Mengikat),Tabel Target,Kolom Target (Yang Diikat)
+order_items,order_id,orders,id
+order_items,product_id,products,id
