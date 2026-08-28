@@ -12,13 +12,12 @@ export default function AdminDashboard() {
     fetchData, updateOrderStatus, toggleProductActive 
   } = useAdminData();
   
-  // State UI Lokal (Hanya untuk form, tidak mengurus Database)
+  // State UI Lokal
   const [isAdding, setIsAdding] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: '', price: 0, stock: 0, image_url: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '' });
 
-  // Fungsi spesifik form masih dipertahankan di UI karena memanipulasi local state input
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProduct.name || newProduct.price <= 0) return alert("Nama dan Harga wajib diisi valid!");
@@ -40,75 +39,103 @@ export default function AdminDashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-gray-300 pb-4 gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900">Dashboard Admin</h1>
-          <p className="text-gray-500 mt-1">Sistem Manajemen KulkasKuliner (Refactored)</p>
+          <p className="text-gray-500 mt-1">Sistem Manajemen KulkasKuliner</p>
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto">
-          <div className="bg-green-100 border border-green-300 px-5 py-2 rounded-lg flex-1 md:flex-none text-right">
+          <div className="bg-green-100 border border-green-300 px-5 py-2 rounded-lg flex-1 md:flex-none text-right shadow-sm">
             <span className="block text-xs font-bold text-green-700 uppercase tracking-wider mb-0.5">Total Pendapatan</span>
             <span className="block text-xl font-black text-green-800">Rp {totalRevenue.toLocaleString('id-ID')}</span>
           </div>
-          <Link href="/" className="bg-gray-800 text-white px-5 py-3 rounded-lg font-bold hover:bg-gray-900 transition-colors">Lihat Publik</Link>
+          <Link href="/" className="bg-gray-800 text-white px-5 py-3 rounded-lg font-bold hover:bg-gray-900 transition-colors shadow-sm text-center">Lihat Publik</Link>
         </div>
       </div>
 
-      {/* STRUKTUR GRID TETAP SAMA SEPERTI SEBELUMNYA */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* KOLOM KIRI: INVENTORI */}
         <div className="lg:col-span-5 bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit">
           <div className="flex justify-between items-center mb-5 border-b pb-2">
             <h2 className="text-xl font-bold text-gray-800">Manajemen Inventori</h2>
-            <button onClick={() => setIsAdding(!isAdding)} className="bg-green-600 text-white px-3 py-1 text-sm font-bold rounded hover:bg-green-700">
+            <button onClick={() => setIsAdding(!isAdding)} className="bg-green-600 text-white px-3 py-1 text-sm font-bold rounded hover:bg-green-700 transition-colors shadow-sm">
               {isAdding ? "Batal" : "+ Tambah Produk"}
             </button>
           </div>
 
+          {/* FORM TAMBAH PRODUK (Dark Mode Override) */}
           {isAdding && (
-            <form onSubmit={handleAddProduct} className="mb-6 bg-green-50 p-4 border border-green-200 rounded-lg space-y-3">
-              <input type="text" placeholder="Nama Produk" required className="w-full p-2 border rounded text-sm" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
+            <form onSubmit={handleAddProduct} className="mb-6 bg-green-50 p-4 border border-green-200 rounded-lg space-y-3 shadow-inner">
+              <input type="text" placeholder="Nama Produk" required 
+                className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} 
+              />
               <div className="flex gap-2">
-                <input type="number" placeholder="Harga" required className="w-1/2 p-2 border rounded text-sm" value={newProduct.price || ''} onChange={e => setNewProduct({...newProduct, price: parseInt(e.target.value)})} />
-                <input type="number" placeholder="Stok" required className="w-1/2 p-2 border rounded text-sm" value={newProduct.stock || ''} onChange={e => setNewProduct({...newProduct, stock: parseInt(e.target.value)})} />
+                <input type="number" placeholder="Harga (Rp)" required min="1"
+                  className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                  value={newProduct.price || ''} onChange={e => setNewProduct({...newProduct, price: parseInt(e.target.value)})} 
+                />
+                <input type="number" placeholder="Stok" required min="0"
+                  className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                  value={newProduct.stock || ''} onChange={e => setNewProduct({...newProduct, stock: parseInt(e.target.value)})} 
+                />
               </div>
-              <input type="url" placeholder="URL Foto" className="w-full p-2 border rounded text-sm" value={newProduct.image_url} onChange={e => setNewProduct({...newProduct, image_url: e.target.value})} />
-              <button type="submit" className="w-full bg-green-600 text-white font-bold py-2 rounded text-sm">Simpan</button>
+              <input type="url" placeholder="URL Foto (opsional)" 
+                className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                value={newProduct.image_url} onChange={e => setNewProduct({...newProduct, image_url: e.target.value})} 
+              />
+              <button type="submit" className="w-full bg-green-600 text-white font-bold py-2.5 rounded-lg text-sm hover:bg-green-700 transition-colors shadow-sm">Simpan Produk Baru</button>
             </form>
           )}
 
-          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
             {products.map((prod) => (
-              <div key={prod.id} className={`p-4 border rounded-lg flex flex-col gap-3 ${!prod.is_active ? 'bg-gray-100 opacity-70' : 'bg-white border-gray-200'}`}>
+              <div key={prod.id} className={`p-4 border rounded-xl flex flex-col gap-3 transition-colors ${!prod.is_active ? 'bg-gray-100 opacity-70' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
+                
+                {/* FORM EDIT PRODUK (Dark Mode Override) */}
                 {editingId === prod.id ? (
-                  <div className="space-y-2">
-                    <input type="text" className="w-full p-1.5 border rounded text-sm font-bold" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
+                  <div className="space-y-2 bg-blue-50/50 p-2 -mx-2 rounded-lg">
+                    <input type="text" placeholder="Nama Produk"
+                      className="w-full p-2 border border-gray-300 rounded text-sm font-bold bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} 
+                    />
                     <div className="flex gap-2">
-                      <input type="number" className="w-1/2 p-1.5 border rounded text-sm" value={editForm.price} onChange={e => setEditForm({...editForm, price: parseInt(e.target.value)})} />
-                      <input type="number" className="w-1/2 p-1.5 border rounded text-sm" value={editForm.stock} onChange={e => setEditForm({...editForm, stock: parseInt(e.target.value)})} />
+                      <input type="number" placeholder="Harga"
+                        className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={editForm.price} onChange={e => setEditForm({...editForm, price: parseInt(e.target.value)})} 
+                      />
+                      <input type="number" placeholder="Stok"
+                        className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={editForm.stock} onChange={e => setEditForm({...editForm, stock: parseInt(e.target.value)})} 
+                      />
                     </div>
-                    <input type="text" placeholder="URL Foto" className="w-full p-1.5 border rounded text-sm" value={editForm.image_url} onChange={e => setEditForm({...editForm, image_url: e.target.value})} />
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={() => saveEditProduct(prod.id)} className="bg-blue-600 text-white px-3 py-1 text-xs font-bold rounded flex-1">Simpan</button>
-                      <button onClick={() => setEditingId(null)} className="bg-gray-300 text-gray-800 px-3 py-1 text-xs font-bold rounded flex-1">Batal</button>
+                    <input type="text" placeholder="URL Foto" 
+                      className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={editForm.image_url} onChange={e => setEditForm({...editForm, image_url: e.target.value})} 
+                    />
+                    <div className="flex gap-2 mt-3">
+                      <button onClick={() => saveEditProduct(prod.id)} className="bg-blue-600 text-white px-3 py-2 text-xs font-bold rounded-lg flex-1 hover:bg-blue-700 transition-colors shadow-sm">Simpan</button>
+                      <button onClick={() => setEditingId(null)} className="bg-gray-200 text-gray-800 px-3 py-2 text-xs font-bold rounded-lg flex-1 hover:bg-gray-300 transition-colors">Batal</button>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-3">
-                      <img src={prod.image_url} alt="thumbnail" className="w-12 h-12 rounded object-cover border border-gray-300" />
-                      <div className="flex-1">
-                        <h3 className="font-bold text-sm text-gray-800 leading-tight">{prod.name}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs font-bold text-blue-600">Rp {prod.price.toLocaleString('id-ID')}</span>
-                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${prod.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>Sisa: {prod.stock}</span>
-                          {!prod.is_active && <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-gray-800 text-white">DIARSIPKAN</span>}
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                        <img src={prod.image_url} alt={prod.name} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-sm text-gray-900 leading-tight truncate">{prod.name}</h3>
+                        <div className="flex items-center flex-wrap gap-2 mt-1.5">
+                          <span className="text-xs font-bold text-blue-700">Rp {prod.price.toLocaleString('id-ID')}</span>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${prod.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>SISA: {prod.stock}</span>
+                          {!prod.is_active && <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-gray-800 text-white">DIARSIPKAN</span>}
                         </div>
                       </div>
                     </div>
-                    <div className="flex gap-2 pt-2 border-t border-gray-100">
-                      <button onClick={() => { setEditingId(prod.id); setEditForm({ name: prod.name, price: prod.price, stock: prod.stock, image_url: prod.image_url }); }} className="text-xs font-bold text-blue-600 hover:underline">Edit Info</button>
+                    <div className="flex gap-3 pt-3 mt-1 border-t border-gray-100">
+                      <button onClick={() => { setEditingId(prod.id); setEditForm({ name: prod.name, price: prod.price, stock: prod.stock, image_url: prod.image_url }); }} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">Edit Item</button>
                       <span className="text-gray-300">|</span>
-                      <button onClick={() => toggleProductActive(prod.id, prod.is_active)} className={`text-xs font-bold hover:underline ${prod.is_active ? 'text-red-500' : 'text-green-600'}`}>
-                        {prod.is_active ? 'Arsipkan' : 'Aktifkan'}
+                      <button onClick={() => toggleProductActive(prod.id, prod.is_active)} className={`text-xs font-bold transition-colors ${prod.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-600 hover:text-green-800'}`}>
+                        {prod.is_active ? 'Sembunyikan' : 'Tampilkan Publik'}
                       </button>
                     </div>
                   </>
@@ -118,40 +145,53 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* KOLOM KANAN: PESANAN TETAP SAMA */}
-        <div className="lg:col-span-7 space-y-6">
+        {/* KOLOM KANAN: PESANAN */}
+        <div className="lg:col-span-7 space-y-5">
           <h2 className="text-xl font-bold text-gray-800 mb-2">Antrean Pesanan Masuk</h2>
           {orders.length === 0 ? (
-             <div className="bg-white p-10 text-center rounded-xl shadow-sm border border-gray-200 text-gray-500 font-medium">Belum ada pesanan.</div>
+             <div className="bg-white p-12 text-center rounded-xl shadow-sm border border-gray-200">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                <p className="text-gray-500 font-medium">Belum ada pesanan masuk hari ini.</p>
+             </div>
           ) : (
             orders.map((order) => (
-               <div key={order.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col md:flex-row">
-                <div className="p-4 md:w-2/5 border-b md:border-b-0 md:border-r border-gray-200 bg-gray-50">
-                  <span className="bg-blue-100 text-blue-800 text-xs font-black px-2 py-1 rounded block w-fit mb-2">{order.order_number}</span>
-                  <h2 className="text-base font-bold text-gray-900">{order.customer_name}</h2>
-                  <p className="text-xs font-semibold text-gray-600 mt-1">📞 {order.customer_phone}</p>
-                  <p className="mt-2 text-xs text-gray-600 bg-white p-2 border rounded"><strong>ALAMAT:</strong> {order.shipping_address}</p>
+               <div key={order.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col md:flex-row transition-all hover:shadow-md">
+                <div className="p-5 md:w-2/5 border-b md:border-b-0 md:border-r border-gray-200 bg-gray-50/50">
+                  <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2.5 py-1 rounded block w-fit mb-3 tracking-wider">{order.order_number}</span>
+                  <h2 className="text-base font-bold text-gray-900 leading-tight">{order.customer_name}</h2>
+                  <p className="text-sm font-semibold text-gray-600 mt-1 flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                    {order.customer_phone}
+                  </p>
+                  <div className="mt-4 text-xs text-gray-700 bg-white p-3 border border-gray-100 rounded-lg shadow-sm">
+                    <span className="block font-black text-[10px] text-gray-400 mb-1">ALAMAT PENGIRIMAN:</span>
+                    {order.shipping_address}
+                  </div>
                 </div>
-                <div className="p-4 md:w-3/5 flex flex-col justify-between">
+                <div className="p-5 md:w-3/5 flex flex-col justify-between">
                   <div>
-                    <ul className="space-y-1 mb-2">
+                    <ul className="space-y-2 mb-4">
                       {order.order_items.map((item) => (
-                        <li key={item.id} className="flex justify-between items-center text-xs">
-                          <span className="font-medium text-gray-700">{item.quantity}x {item.products?.name}</span>
-                          <span className="font-bold">Rp {(item.quantity * item.price_at_time).toLocaleString('id-ID')}</span>
+                        <li key={item.id} className="flex justify-between items-start text-sm">
+                          <span className="font-medium text-gray-800 pr-4"><span className="font-bold text-blue-600">{item.quantity}x</span> {item.products?.name}</span>
+                          <span className="font-bold text-gray-900 whitespace-nowrap">Rp {(item.quantity * item.price_at_time).toLocaleString('id-ID')}</span>
                         </li>
                       ))}
                     </ul>
-                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                      <span className="font-bold text-gray-600 text-sm">Total</span>
-                      <span className="text-base font-black text-blue-600">Rp {order.total_amount.toLocaleString('id-ID')}</span>
+                    <div className="flex justify-between items-center pt-3 border-t border-dashed border-gray-300">
+                      <span className="font-bold text-gray-500 text-sm tracking-wide">TOTAL TAGIHAN</span>
+                      <span className="text-lg font-black text-blue-700">Rp {order.total_amount.toLocaleString('id-ID')}</span>
                     </div>
                   </div>
-                  <div className="mt-3 bg-gray-50 p-2 rounded border border-gray-200 flex flex-wrap items-center justify-between gap-2">
-                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${ order.status === 'unpaid' ? 'bg-yellow-100 text-yellow-800' : order.status === 'canceled' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800' }`}>{order.status}</span>
+                  <div className="mt-5 bg-gray-50/80 p-3 rounded-lg border border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                    <span className={`px-2.5 py-1.5 rounded text-[10px] font-black uppercase tracking-wider shadow-sm ${ order.status === 'unpaid' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : order.status === 'canceled' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-green-100 text-green-800 border border-green-200' }`}>
+                      {order.status}
+                    </span>
                     <div className="flex gap-2">
-                      {order.status === 'unpaid' && ( <button onClick={() => updateOrderStatus(order.id, 'paid')} className="bg-blue-600 text-white px-3 py-1 rounded text-[10px] font-bold hover:bg-blue-700">Set Paid</button> )}
-                      {order.status !== 'canceled' && order.status !== 'completed' && ( <button onClick={() => updateOrderStatus(order.id, 'canceled')} className="bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded text-[10px] font-bold hover:bg-red-100">Cancel</button> )}
+                      {order.status === 'unpaid' && ( <button onClick={() => updateOrderStatus(order.id, 'paid')} className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm focus:ring-2 focus:ring-blue-400 outline-none">Set Lunas</button> )}
+                      {order.status !== 'canceled' && order.status !== 'completed' && ( <button onClick={() => updateOrderStatus(order.id, 'canceled')} className="bg-white text-red-600 border border-red-200 px-4 py-1.5 rounded text-xs font-bold hover:bg-red-50 transition-colors shadow-sm focus:ring-2 focus:ring-red-400 outline-none">Batalkan</button> )}
                     </div>
                   </div>
                 </div>
