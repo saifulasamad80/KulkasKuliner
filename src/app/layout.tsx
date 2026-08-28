@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import PwaInstallButton from "@/components/PwaInstallButton";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,11 +13,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// RESOLUSI MUTLAK: Metadata lengkap dengan PWA Manifest dan Absolute URL Open Graph
 export const metadata: Metadata = {
   metadataBase: new URL('https://kulkaskuliner.vercel.app'),
   title: "KulkasKuliner | Agen Frozen Food Premium Jakarta Timur",
   description: "Distributor Frozen Food Premium & Praktis. Solusi bekal keluarga dan stok dapur harian Anda. Pesan sekarang, kurir instan langsung jalan!",
-  // Pemanggilan Manifest PWA
   manifest: "/manifest.json",
   openGraph: {
     title: "KulkasKuliner Jakarta Timur",
@@ -55,7 +56,10 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         {children}
         
-        {/* Registrasi Service Worker PWA secara asinkronus */}
+        {/* RESOLUSI PWA: Tombol Install Kustom yang mencegat mesin Chrome */}
+        <PwaInstallButton />
+        
+        {/* Registrasi Service Worker PWA secara asinkronus agar PWA hidup */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
