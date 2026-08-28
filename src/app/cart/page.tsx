@@ -6,22 +6,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 export default function CartPage() {
-  const { items, increaseQty, decreaseQty, removeItem, clearCart, decreaseItemToMaxStock } = useCartStore(state => ({
-    items: state.items,
-    increaseQty: state.increaseQty,
-    decreaseQty: state.decreaseQty,
-    removeItem: state.removeItem,
-    clearCart: state.clearCart,
-    decreaseItemToMaxStock: (id: string, maxStock: number) => {
-      const stateItems = useCartStore.getState().items;
-      const targetItem = stateItems.find(i => i.id === id);
-      if (targetItem && targetItem.quantity > maxStock) {
-        useCartStore.setState({
-          items: stateItems.map(item => item.id === id ? { ...item, quantity: maxStock } : item)
-        });
-      }
-    }
-  }));
+  // RESOLUSI INFINITE LOOP: Memanggil seluruh fungsi murni dari store, tanpa membuat objek baru
+  const { items, increaseQty, decreaseQty, removeItem, clearCart, decreaseItemToMaxStock } = useCartStore();
 
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -37,6 +23,7 @@ export default function CartPage() {
     setIsClient(true);
     
     const syncCartWithDB = async () => {
+      // Kita ambil current snapshot sekali saja untuk menghindari stale closure
       const currentItems = useCartStore.getState().items;
       const itemIds = currentItems.map(i => i.id);
       
@@ -51,8 +38,6 @@ export default function CartPage() {
         .in('id', itemIds);
 
       if (data && !error) {
-        let stockChanged = false;
-        
         data.forEach(dbItem => {
           const cartItem = currentItems.find(ci => ci.id === dbItem.id);
           
@@ -60,11 +45,9 @@ export default function CartPage() {
             if (dbItem.stock === 0) {
                removeItem(cartItem.id);
                alert(`Maaf, ${dbItem.name} baru saja habis dibeli orang lain dan telah dihapus dari keranjang Anda.`);
-               stockChanged = true;
             } else if (cartItem.quantity > dbItem.stock) {
                decreaseItemToMaxStock(cartItem.id, dbItem.stock);
                alert(`Stok ${dbItem.name} menurun. Kuantitas pesanan Anda disesuaikan menjadi sisa stok (${dbItem.stock}).`);
-               stockChanged = true;
             }
           }
         });
@@ -73,7 +56,7 @@ export default function CartPage() {
     };
 
     syncCartWithDB();
-  }, []);
+  }, []); // Array kosong memastikan hanya jalan sekali saat halaman dimuat
 
   if (!isClient) return null;
 
@@ -84,7 +67,6 @@ export default function CartPage() {
     setIsLoading(true);
 
     try {
-      // 1. Eksekusi Stored Procedure (Data sensitif dikunci ke dalam DB)
       const { data: orderNumber, error } = await supabase.rpc('process_checkout', {
         c_name: formData.name,
         c_phone: formData.phone,
@@ -94,8 +76,6 @@ export default function CartPage() {
 
       if (error) throw new Error(error.message);
 
-      // RESOLUSI CMP-01: Data Minimization pada Payload URL
-      // PII (Nama, Alamat, No HP) DIBUANG dari string pesan agar tidak terekam di riwayat browser.
       const adminPhone = "628889560447"; 
       const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya.\n\n*ORDER ID: ${orderNumber}*\n\nMohon cek sistem untuk detail alamat saya, dan infokan ongkos kirim Instan/Sameday beserta total transfer.\n\nTerima kasih.`;
       

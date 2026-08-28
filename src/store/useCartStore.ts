@@ -1,12 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-// Definisi tipe data ketat (Strict Typing)
 export interface CartItem {
   id: string;
   name: string;
   price: number;
-  stock: number; // Kita wajib bawa stok untuk validasi maksimal
+  stock: number;
   quantity: number;
 }
 
@@ -17,6 +16,8 @@ interface CartState {
   decreaseQty: (id: string) => void;
   removeItem: (id: string) => void;
   clearCart: () => void;
+  // RESOLUSI INFINITE LOOP: Fungsi ini sekarang resmi menjadi bagian dari Store
+  decreaseItemToMaxStock: (id: string, maxStock: number) => void;
 }
 
 export const useCartStore = create<CartState>()(
@@ -24,13 +25,11 @@ export const useCartStore = create<CartState>()(
     (set, get) => ({
       items: [],
 
-      // Logika Tambah Barang dengan Validasi Stok
       addItem: (product) => {
         const currentItems = get().items;
         const existingItem = currentItems.find((item) => item.id === product.id);
 
         if (existingItem) {
-          // Validasi Brutal: Jangan izinkan tambah jika melebihi stok database
           if (existingItem.quantity >= product.stock) {
             alert(`Maksimal pembelian untuk ${product.name} adalah ${product.stock}`);
             return;
@@ -43,7 +42,6 @@ export const useCartStore = create<CartState>()(
             ),
           });
         } else {
-          // Tambah barang baru jika belum ada
           if (product.stock > 0) {
             set({ items: [...currentItems, { ...product, quantity: 1 }] });
           }
@@ -76,7 +74,6 @@ export const useCartStore = create<CartState>()(
             ),
           });
         } else {
-          // Jika kuantitas 1 dan dikurangi, hapus dari keranjang
           set({ items: currentItems.filter((item) => item.id !== id) });
         }
       },
@@ -86,9 +83,19 @@ export const useCartStore = create<CartState>()(
       },
 
       clearCart: () => set({ items: [] }),
+
+      // Implementasi fungsi penyesuaian stok yang aman dari re-render
+      decreaseItemToMaxStock: (id, maxStock) => {
+        const currentItems = get().items;
+        set({
+          items: currentItems.map((item) => 
+            item.id === id ? { ...item, quantity: maxStock } : item
+          )
+        });
+      }
     }),
     {
-      name: 'kulkas-kuliner-cart', // Nama key yang akan tersimpan di LocalStorage browser
+      name: 'kulkas-kuliner-cart',
     }
   )
 );
