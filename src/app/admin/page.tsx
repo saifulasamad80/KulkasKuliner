@@ -6,13 +6,11 @@ import { supabase } from '@/lib/supabase';
 import { useAdminData } from '@/hooks/useAdminData';
 
 export default function AdminDashboard() {
-  // STATE AUTENTIKASI DARURAT
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
 
-  // LOGIC ADMIN DATA
   const { 
     orders, products, totalRevenue, isLoading, 
     fetchData, updateOrderStatus, toggleProductActive 
@@ -23,7 +21,6 @@ export default function AdminDashboard() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '' });
 
-  // CEK SESI SAAT HALAMAN DIMUAT
   useEffect(() => {
     const savedSession = localStorage.getItem('kuliner_admin_auth');
     if (savedSession === "authenticated") {
@@ -32,22 +29,17 @@ export default function AdminDashboard() {
     setIsCheckingAuth(false);
   }, []);
 
-  // FUNGSI LOGIN (TARIK PIN DARI SUPABASE)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsVerifying(true);
-
     try {
-      // Panggil PIN rahasia dari tabel store_settings
       const { data, error } = await supabase
         .from('store_settings')
         .select('setting_value')
         .eq('setting_key', 'admin_secret_pin')
         .single();
 
-      if (error || !data) {
-        throw new Error("Gagal terhubung ke server keamanan.");
-      }
+      if (error || !data) throw new Error("Gagal terhubung ke server keamanan.");
 
       if (pinInput === data.setting_value) {
         localStorage.setItem('kuliner_admin_auth', 'authenticated');
@@ -64,12 +56,13 @@ export default function AdminDashboard() {
     }
   };
 
+  // RESOLUSI LOGIKA KELUAR (LOGOUT & REDIRECT)
   const handleLogout = () => {
-    localStorage.removeItem('kuliner_admin_auth');
-    setIsAuthenticated(false);
+    localStorage.removeItem('kuliner_admin_auth'); // 1. Hapus kunci sesi
+    setIsAuthenticated(false);                     // 2. Kunci state
+    window.location.href = '/';                    // 3. Tendang paksa ke halaman utama (Publik)
   };
 
-  // FUNGSI ADMIN EXISTINGS...
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProduct.name || newProduct.price <= 0) return alert("Nama dan Harga wajib diisi valid!");
@@ -84,10 +77,8 @@ export default function AdminDashboard() {
     else { setEditingId(null); fetchData(); }
   };
 
-  // SCREENING 1: Loading Cek Sesi
   if (isCheckingAuth) return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-white">Verifikasi Keamanan...</p></div>;
 
-  // SCREENING 2: Gerbang Login Terkunci (Tarpitting)
   if (!isAuthenticated) {
     return (
       <main className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
@@ -122,7 +113,6 @@ export default function AdminDashboard() {
     );
   }
 
-  // SCREENING 3: Tampilan Dashboard (Jika Lolos)
   if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-xl text-gray-500">Memuat Data Dashboard...</div>;
 
   return (
@@ -135,13 +125,14 @@ export default function AdminDashboard() {
           </h1>
           <p className="text-gray-500 mt-1">Sistem Manajemen KulkasKuliner</p>
         </div>
+        
+        {/* RESOLUSI UI: Menghapus tombol Lihat Publik dan membiarkan Kunci Keluar berdiri sendiri */}
         <div className="flex items-center flex-wrap gap-4 w-full md:w-auto">
           <div className="bg-green-100 border border-green-300 px-5 py-2 rounded-lg flex-1 md:flex-none text-right shadow-sm">
             <span className="block text-xs font-bold text-green-700 uppercase tracking-wider mb-0.5">Total Pendapatan</span>
             <span className="block text-xl font-black text-green-800">Rp {totalRevenue.toLocaleString('id-ID')}</span>
           </div>
-          <Link href="/" className="bg-gray-800 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-gray-900 transition-colors shadow-sm text-center">Lihat Publik</Link>
-          <button onClick={handleLogout} className="bg-red-100 text-red-700 border border-red-300 px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-red-200 transition-colors shadow-sm text-center">Kunci Keluar</button>
+          <button onClick={handleLogout} className="bg-red-100 text-red-700 border border-red-300 px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-red-200 transition-colors shadow-sm text-center">Kunci Keluar</button>
         </div>
       </div>
 
