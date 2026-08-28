@@ -12,18 +12,19 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// RESOLUSI SEO & OPEN GRAPH (WhatsApp, FB, IG Preview)
+// RESOLUSI MUTLAK: Menggunakan metadataBase & Absolute URL agar Bot WhatsApp tidak buta
 export const metadata: Metadata = {
+  metadataBase: new URL('https://kulkaskuliner.vercel.app'),
   title: "KulkasKuliner | Agen Frozen Food Premium Jakarta Timur",
   description: "Distributor Frozen Food Premium & Praktis. Solusi bekal keluarga dan stok dapur harian Anda. Pesan sekarang, kurir instan langsung jalan!",
   openGraph: {
     title: "KulkasKuliner Jakarta Timur",
     description: "Sedia Pempek, Durian, Bebek Bumbu Hitam, dan aneka Frozen Food premium. Siap antar Instan/Sameday!",
-    url: "https://kulkaskuliner.vercel.app", // Ganti kalau domain lu berubah
+    url: "https://kulkaskuliner.vercel.app",
     siteName: "KulkasKuliner",
     images: [
       {
-        url: "/kulkul.jpeg", // Menunjuk ke foto hero di folder public lu
+        url: "https://kulkaskuliner.vercel.app/kulkul.jpeg", // ABSOLUTE URL
         width: 1200,
         height: 630,
         alt: "Katalog KulkasKuliner",
@@ -36,7 +37,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "KulkasKuliner Jakarta Timur",
     description: "Sedia aneka Frozen Food premium. Siap antar Instan!",
-    images: ["/kulkul.jpeg"],
+    images: ["https://kulkaskuliner.vercel.app/kulkul.jpeg"], // ABSOLUTE URL
   },
 };
 
