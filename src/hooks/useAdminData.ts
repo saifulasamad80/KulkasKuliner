@@ -8,14 +8,26 @@ export type Order = {
   customer_name: string; 
   customer_phone: string; 
   shipping_address: string; 
-  notes?: string; // INJEKSI: Membaca catatan pembeli
+  notes?: string; 
   total_amount: number; 
   status: string; 
   created_at: string; 
-  items?: any[]; // INJEKSI: Membaca kolom JSON Keranjang Belanja yang baru
-  order_items?: OrderItem[]; // Fallback untuk pesanan jadul
+  items?: any[]; 
+  order_items?: OrderItem[]; 
 };
-export type Product = { id: string; name: string; stock: number; price: number; image_url: string; is_active: boolean; };
+
+// INJEKSI TIPE DATA BARU UNTUK PRODUK
+export type Product = { 
+  id: string; 
+  name: string; 
+  stock: number; 
+  price: number; 
+  image_url: string; 
+  is_active: boolean; 
+  description?: string;
+  rating_avg?: number;
+  rating_count?: number;
+};
 
 export function useAdminData() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -26,8 +38,6 @@ export function useAdminData() {
   const fetchData = async () => {
     setIsLoading(true);
     
-    // RESOLUSI PRF-02: Batasi pengambilan data order hanya 50 pesanan terbaru (Pagination sederhana)
-    // Tanda bintang (*) akan otomatis menarik kolom 'items' dan 'notes'
     const { data: orderData } = await supabase
       .from('orders')
       .select(`*, order_items (id, quantity, price_at_time, products (name))`)

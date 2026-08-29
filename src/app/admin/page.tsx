@@ -17,9 +17,11 @@ export default function AdminDashboard() {
   } = useAdminData();
   
   const [isAdding, setIsAdding] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: '', price: 0, stock: 0, image_url: '' });
+  
+  // STATE BARU: Ditambah description, rating_avg, dan rating_count
+  const [newProduct, setNewProduct] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0.0, rating_count: 0 });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '' });
+  const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0.0, rating_count: 0 });
 
   useEffect(() => {
     const savedSession = sessionStorage.getItem('kuliner_admin_auth');
@@ -67,7 +69,12 @@ export default function AdminDashboard() {
     if (!newProduct.name || newProduct.price <= 0) return alert("Nama dan Harga wajib diisi valid!");
     const { error } = await supabase.from('products').insert([{ ...newProduct, is_active: true }]);
     if (error) alert(`Gagal: ${error.message}`);
-    else { alert("Produk ditambah!"); setIsAdding(false); setNewProduct({ name: '', price: 0, stock: 0, image_url: '' }); fetchData(); }
+    else { 
+      alert("Produk ditambah!"); 
+      setIsAdding(false); 
+      setNewProduct({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0.0, rating_count: 0 }); 
+      fetchData(); 
+    }
   };
 
   const saveEditProduct = async (id: string) => {
@@ -144,21 +151,35 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* FORM TAMBAH PRODUK */}
+          {/* FORM TAMBAH PRODUK (DIPERBARUI) */}
           {isAdding && (
             <form onSubmit={handleAddProduct} className="mb-6 bg-green-50 p-4 border border-green-200 rounded-lg space-y-3 shadow-inner">
               <input type="text" placeholder="Nama Produk" required 
                 className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
                 value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} 
               />
+              <textarea placeholder="Deskripsi Produk (Maksimal terlihat 2 baris)" rows={2}
+                className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} 
+              />
               <div className="flex gap-2">
                 <input type="number" placeholder="Harga (Rp)" required min="1"
                   className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
                   value={newProduct.price || ''} onChange={e => setNewProduct({...newProduct, price: parseInt(e.target.value)})} 
                 />
-                <input type="number" placeholder="Stok" required min="0"
+                <input type="number" placeholder="Stok Gudang" required min="0"
                   className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
                   value={newProduct.stock || ''} onChange={e => setNewProduct({...newProduct, stock: parseInt(e.target.value)})} 
+                />
+              </div>
+              <div className="flex gap-2">
+                <input type="number" step="0.1" placeholder="Rating (Misal: 4.8)"
+                  className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                  value={newProduct.rating_avg || ''} onChange={e => setNewProduct({...newProduct, rating_avg: parseFloat(e.target.value)})} 
+                />
+                <input type="number" placeholder="Jumlah Ulasan (Misal: 150)"
+                  className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                  value={newProduct.rating_count || ''} onChange={e => setNewProduct({...newProduct, rating_count: parseInt(e.target.value)})} 
                 />
               </div>
               <input type="url" placeholder="URL Foto Absolut (Raw GitHub)" 
@@ -173,12 +194,16 @@ export default function AdminDashboard() {
             {products.map((prod) => (
               <div key={prod.id} className={`p-4 border rounded-xl flex flex-col gap-3 transition-colors ${!prod.is_active ? 'bg-gray-100 opacity-70' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
                 
-                {/* FORM EDIT PRODUK */}
+                {/* FORM EDIT PRODUK (DIPERBARUI) */}
                 {editingId === prod.id ? (
-                  <div className="space-y-2 bg-blue-50/50 p-2 -mx-2 rounded-lg">
+                  <div className="space-y-2 bg-blue-50/50 p-2 -mx-2 rounded-lg border border-blue-100">
                     <input type="text" placeholder="Nama Produk"
                       className="w-full p-2 border border-gray-300 rounded text-sm font-bold bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} 
+                    />
+                    <textarea placeholder="Deskripsi" rows={2}
+                      className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} 
                     />
                     <div className="flex gap-2">
                       <input type="number" placeholder="Harga"
@@ -190,12 +215,22 @@ export default function AdminDashboard() {
                         value={editForm.stock} onChange={e => setEditForm({...editForm, stock: parseInt(e.target.value)})} 
                       />
                     </div>
+                    <div className="flex gap-2">
+                      <input type="number" step="0.1" placeholder="Rating"
+                        className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={editForm.rating_avg || ''} onChange={e => setEditForm({...editForm, rating_avg: parseFloat(e.target.value)})} 
+                      />
+                      <input type="number" placeholder="Jml Ulasan"
+                        className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={editForm.rating_count || ''} onChange={e => setEditForm({...editForm, rating_count: parseInt(e.target.value)})} 
+                      />
+                    </div>
                     <input type="text" placeholder="URL Foto Absolut" 
                       className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editForm.image_url} onChange={e => setEditForm({...editForm, image_url: e.target.value})} 
                     />
                     <div className="flex gap-2 mt-3">
-                      <button onClick={() => saveEditProduct(prod.id)} className="bg-blue-600 text-white px-3 py-2 text-xs font-bold rounded-lg flex-1 hover:bg-blue-700 transition-colors shadow-sm">Simpan</button>
+                      <button onClick={() => saveEditProduct(prod.id)} className="bg-blue-600 text-white px-3 py-2 text-xs font-bold rounded-lg flex-1 hover:bg-blue-700 transition-colors shadow-sm">Simpan Perubahan</button>
                       <button onClick={() => setEditingId(null)} className="bg-gray-200 text-gray-800 px-3 py-2 text-xs font-bold rounded-lg flex-1 hover:bg-gray-300 transition-colors">Batal</button>
                     </div>
                   </div>
@@ -215,7 +250,23 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     <div className="flex gap-3 pt-3 mt-1 border-t border-gray-100">
-                      <button onClick={() => { setEditingId(prod.id); setEditForm({ name: prod.name, price: prod.price, stock: prod.stock, image_url: prod.image_url }); }} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">Edit Item</button>
+                      <button 
+                        onClick={() => { 
+                          setEditingId(prod.id); 
+                          setEditForm({ 
+                            name: prod.name, 
+                            price: prod.price, 
+                            stock: prod.stock, 
+                            image_url: prod.image_url,
+                            description: prod.description || '',
+                            rating_avg: prod.rating_avg || 0.0,
+                            rating_count: prod.rating_count || 0
+                          }); 
+                        }} 
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                      >
+                        Edit Item
+                      </button>
                       <span className="text-gray-300">|</span>
                       <button onClick={() => toggleProductActive(prod.id, prod.is_active)} className={`text-xs font-bold transition-colors ${prod.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-600 hover:text-green-800'}`}>
                         {prod.is_active ? 'Sembunyikan' : 'Tampilkan Publik'}
@@ -254,7 +305,6 @@ export default function AdminDashboard() {
                     {order.shipping_address}
                   </div>
 
-                  {/* INJEKSI: Memunculkan Catatan Pembeli */}
                   {order.notes && order.notes.trim() !== '' && (
                     <div className="mt-2 text-xs text-yellow-800 bg-yellow-50 p-3 border border-yellow-200 rounded-lg shadow-sm">
                       <span className="block font-black text-[10px] text-yellow-600 mb-1">CATATAN:</span>
@@ -265,7 +315,6 @@ export default function AdminDashboard() {
                 <div className="p-5 md:w-3/5 flex flex-col justify-between">
                   <div>
                     <ul className="space-y-2 mb-4">
-                      {/* INJEKSI: Mesin Pembaca JSON (Items) dengan Fallback ke arsitektur lama */}
                       {order.items && order.items.length > 0 ? (
                         order.items.map((item: any, idx: number) => (
                           <li key={idx} className="flex justify-between items-start text-sm border-b border-gray-50 pb-2 last:border-0">
@@ -279,7 +328,6 @@ export default function AdminDashboard() {
                           </li>
                         ))
                       ) : (
-                        // Fallback jika membaca data pesanan lama
                         order.order_items?.map((item: any) => (
                           <li key={item.id} className="flex justify-between items-start text-sm border-b border-gray-50 pb-2 last:border-0">
                             <span className="font-medium text-gray-800 pr-4">

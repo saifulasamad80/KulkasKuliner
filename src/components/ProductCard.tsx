@@ -17,11 +17,10 @@ export default function ProductCard({ product }: { product: any }) {
 
   const fakeOriginalPrice = product.price * 1.2;
 
-  // MENGAMBIL DATA NYATA DARI DATABASE (Tinggalkan Kosmetik Palsu)
-  // Fallback: Jika di database kosong (null), kita tampilkan nilai default yang wajar
+  // MENGAMBIL DATA NYATA DARI DATABASE
   const realRating = product.rating_avg ? Number(product.rating_avg).toFixed(1) : "0.0";
   const realReviews = product.rating_count || 0;
-  const realDescription = product.description || "Frozen food siap saji.";
+  const realDescription = product.description || "Deskripsi belum tersedia.";
 
   return (
     <div className="bg-white rounded-[12px] shadow-sm hover:shadow-md border border-gray-100 overflow-hidden flex flex-col h-full transition-all duration-200 relative group">
@@ -63,24 +62,15 @@ export default function ProductCard({ product }: { product: any }) {
           </div>
         </div>
 
-        {/* Deskripsi Asli dari Supabase */}
-        <p className="text-[12px] text-gray-500 mb-2 truncate font-medium">
+        {/* 
+          Deskripsi Asli dari Supabase 
+          Catatan: Pakai line-clamp-2 agar maksimal 2 baris (anti-jebol)
+        */}
+        <p className="text-[12px] text-gray-500 mb-3 line-clamp-2 font-medium leading-relaxed">
           {realDescription}
         </p>
 
-        {/* Waktu Estimasi */}
-        <div className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 mb-3">
-          <span className="flex items-center gap-1">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            15-30 min
-          </span>
-          <span className="text-gray-300 text-[10px]">●</span>
-          <span>Instan</span>
-          <span className="text-gray-300 text-[10px]">●</span>
-          <span>$$</span>
-        </div>
+        {/* BLOK WAKTU ESTIMASI SUDAH DIHANCURKAN DARI SINI */}
         
         <div className="flex items-center gap-2 mb-3 mt-auto">
           <p className="text-[16px] font-bold text-gray-900">Rp {product.price.toLocaleString('id-ID')}</p>
