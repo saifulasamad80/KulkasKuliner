@@ -11,8 +11,24 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
   const [liveProducts, setLiveProducts] = useState(products);
 
   useEffect(() => {
+    // 1. Tampilkan data dari server (bisa jadi data lama karena Cache Next.js)
     setLiveProducts(products);
 
+    // 2. INJEKSI ANTI-CACHE: Detik itu juga, tarik data paling fresh dari Supabase diam-diam
+    const fetchFreshestData = async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+      
+      if (data && !error) {
+        setLiveProducts(data); // Timpa data lama dengan realita terbaru
+      }
+    };
+    fetchFreshestData();
+
+    // 3. MENGHIDUPKAN RADAR WEBSOCKET (Menangkap perubahan saat layar sedang ditatap)
     const channel = supabase
       .channel('public:products')
       .on(
@@ -35,7 +51,7 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [products]);
+  }, [products]); // Efek ini akan berjalan ulang jika ada perpindahan halaman (routing)
 
   const categoryMeta = [
     { id: "Semua", label: "Semua" },
@@ -76,7 +92,7 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
       {/* AREA PINTAR (SEARCH & MENU KAPSUL FoodDash Style) */}
       <div className="mb-8 space-y-4">
         
-        {/* Kolom Pencarian (FoodDash Input Style: md shadow, 12px radius) */}
+        {/* Kolom Pencarian */}
         <div className="relative max-w-xl mx-auto">
           <input 
             type="text" 
@@ -90,7 +106,7 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
           </svg>
         </div>
 
-        {/* Tombol Kapsul (FoodDash Filter Chips: Pill shape) */}
+        {/* Tombol Kapsul Filter */}
         {!isSearching && (
           <div className="flex overflow-x-auto gap-2 pb-2 custom-scrollbar justify-start md:justify-center px-1">
             {categoryMeta.map((cat) => (
@@ -130,7 +146,6 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
              return (
                <div key={cat} className="pt-2">
                   <h3 className="text-[18px] font-semibold text-gray-900 mb-4 px-1">{cat}</h3>
-                  {/* Grid diatur agar mobile menampilkan 2 kolom (seperti FoodDash) */}
                   <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                     {catProducts.map(p => <ProductCard key={p.id} product={p} />)}
                   </div>
