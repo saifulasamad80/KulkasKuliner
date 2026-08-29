@@ -150,7 +150,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* FORM TAMBAH PRODUK (DENGAN LABEL BARU) */}
+          {/* FORM TAMBAH PRODUK */}
           {isAdding && (
             <form onSubmit={handleAddProduct} className="mb-6 bg-green-50 p-4 border border-green-200 rounded-lg space-y-3 shadow-inner">
               <input type="text" placeholder="Nama Produk" required 
@@ -193,7 +193,7 @@ export default function AdminDashboard() {
             {products.map((prod) => (
               <div key={prod.id} className={`p-4 border rounded-xl flex flex-col gap-3 transition-colors ${!prod.is_active ? 'bg-gray-100 opacity-70' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
                 
-                {/* FORM EDIT PRODUK (DENGAN LABEL BARU) */}
+                {/* FORM EDIT PRODUK */}
                 {editingId === prod.id ? (
                   <div className="space-y-2 bg-blue-50/50 p-2 -mx-2 rounded-lg border border-blue-100">
                     <input type="text" placeholder="Nama Produk"
@@ -235,6 +235,7 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <>
+                    {/* TAMPILAN ITEM DI ADMIN */}
                     <div className="flex items-center gap-4">
                       <div className="w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
                         <img src={prod.image_url} alt={prod.name} className="w-full h-full object-cover" />
@@ -243,7 +244,16 @@ export default function AdminDashboard() {
                         <h3 className="font-bold text-sm text-gray-900 leading-tight truncate">{prod.name}</h3>
                         <div className="flex items-center flex-wrap gap-2 mt-1.5">
                           <span className="text-xs font-bold text-blue-700">Rp {prod.price.toLocaleString('id-ID')}</span>
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${prod.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>SISA: {prod.stock}</span>
+                          
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${prod.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            SISA: {prod.stock}
+                          </span>
+                          
+                          {/* INJEKSI METRIK TERJUAL DI SINI */}
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                            🛒 {prod.rating_avg ? Math.floor(Number(prod.rating_avg)) : 0} Terjual
+                          </span>
+
                           {!prod.is_active && <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-gray-800 text-white">DIARSIPKAN</span>}
                         </div>
                       </div>
