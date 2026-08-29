@@ -2,60 +2,52 @@
 
 import { useState, useEffect } from 'react';
 import ProductCard from './ProductCard';
-import { supabase } from '@/lib/supabase'; // INJEKSI: Memanggil mesin Supabase
+import { supabase } from '@/lib/supabase';
 
 export default function CatalogBrowser({ products }: { products: any[] }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Semua");
   
-  // RESOLUSI NRT: Memindahkan produk statis menjadi State yang hidup
   const [liveProducts, setLiveProducts] = useState(products);
 
   useEffect(() => {
-    // Memastikan state sinkron jika ada perubahan data dari server (refresh)
     setLiveProducts(products);
 
-    // MENGHIDUPKAN RADAR WEBSOCKET SUPABASE
     const channel = supabase
       .channel('public:products')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'products' }, // Dengarkan Update, Insert, & Delete
+        { event: '*', schema: 'public', table: 'products' }, 
         (payload) => {
           if (payload.eventType === 'UPDATE') {
-            // Jika ada stok berkurang, langsung timpa angka di layar
             setLiveProducts((current) => 
               current.map((p) => (p.id === payload.new.id ? { ...p, ...payload.new } : p))
             );
           } else if (payload.eventType === 'INSERT') {
-            // Jika lu tambah menu baru dari Admin, langsung muncul tanpa refresh
             setLiveProducts((current) => [...current, payload.new]);
           } else if (payload.eventType === 'DELETE') {
-            // Jika menu dihapus, langsung hilang dari layar
             setLiveProducts((current) => current.filter((p) => p.id !== payload.old.id));
           }
         }
       )
       .subscribe();
 
-    // Mematikan radar jika pembeli pindah halaman (Mencegah kebocoran memori RAM)
     return () => {
       supabase.removeChannel(channel);
     };
   }, [products]);
 
   const categoryMeta = [
-    { id: "Semua", label: "Semua", icon: "🔥" },
-    { id: "Pasta", label: "Pasta", icon: "🍝" },
-    { id: "Kebab", label: "Kebab", icon: "🌯" },
-    { id: "Durian", label: "Durian", icon: "🍈" },
-    { id: "Pempek", label: "Pempek", icon: "🥟" },
-    { id: "Lauk & Cemilan", label: "Lauk & Cemilan", icon: "🍗" }
+    { id: "Semua", label: "Semua" },
+    { id: "Pasta", label: "Pasta" },
+    { id: "Kebab", label: "Kebab" },
+    { id: "Durian", label: "Durian" },
+    { id: "Pempek", label: "Pempek" },
+    { id: "Lauk & Cemilan", label: "Lauk & Cemilan" }
   ];
 
   const categories = categoryMeta.filter(c => c.id !== "Semua").map(c => c.id);
 
-  // Filter sekarang menggunakan liveProducts (Data yang sudah tersambung radar)
   const getProductsByCategory = (cat: string) => {
     return liveProducts.filter((p) => {
       const nameLower = p.name.toLowerCase();
@@ -81,44 +73,37 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
   return (
     <div className="w-full">
       
-      {/* AREA PINTAR (SEARCH & MENU KAPSUL) */}
-      <div className="mb-12 space-y-6">
+      {/* AREA PINTAR (SEARCH & MENU KAPSUL FoodDash Style) */}
+      <div className="mb-8 space-y-4">
         
-        {/* Kolom Pencarian */}
+        {/* Kolom Pencarian (FoodDash Input Style: md shadow, 12px radius) */}
         <div className="relative max-w-xl mx-auto">
           <input 
             type="text" 
-            placeholder="Cari menu (misal: Lasagna, Ayam)..." 
-            className="w-full pl-12 pr-4 py-3.5 bg-white border border-gray-300 rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.05)] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-700 transition-all font-medium"
+            placeholder="Cari makanan..." 
+            className="w-full pl-11 pr-4 py-[10px] bg-white border-none rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.08)] focus:ring-2 focus:ring-red-600 outline-none text-gray-700 text-[14px] transition-all"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400 absolute left-4 top-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 absolute left-4 top-[11px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </div>
 
-        {/* Tombol Kapsul */}
+        {/* Tombol Kapsul (FoodDash Filter Chips: Pill shape) */}
         {!isSearching && (
-          <div className="flex overflow-x-auto gap-3 pb-4 custom-scrollbar justify-start md:justify-center px-2 pt-2">
+          <div className="flex overflow-x-auto gap-2 pb-2 custom-scrollbar justify-start md:justify-center px-1">
             {categoryMeta.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`flex items-center gap-3 whitespace-nowrap pl-1.5 pr-5 py-1.5 rounded-full text-sm font-black transition-all duration-300 ${
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-[13px] font-medium transition-all ${
                   activeCategory === cat.id 
-                    ? "bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-[0_4px_15px_rgba(37,99,235,0.4)] scale-105 border border-transparent" 
-                    : "bg-white text-gray-900 border-2 border-gray-100 shadow-[0_4px_10px_rgba(0,0,0,0.06)] hover:border-blue-200 hover:text-blue-700 hover:shadow-md hover:-translate-y-0.5"
+                    ? "bg-red-600 text-white shadow-sm" 
+                    : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
                 }`}
               >
-                <div className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors shadow-inner ${
-                  activeCategory === cat.id
-                    ? "bg-white/20"
-                    : "bg-blue-50"
-                }`}>
-                  <span className="text-xl leading-none">{cat.icon}</span>
-                </div>
-                <span>{cat.label}</span>
+                {cat.label}
               </button>
             ))}
           </div>
@@ -128,29 +113,25 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
       {/* AREA ETALASE PRODUK */}
       {isSearching ? (
         searchResults.length === 0 ? (
-          <div className="bg-white p-12 text-center rounded-2xl border border-dashed border-gray-300">
-             <p className="text-gray-500 font-bold">Menu "{searchQuery}" tidak ditemukan.</p>
+          <div className="bg-white p-12 text-center rounded-xl border border-gray-100">
+             <p className="text-gray-500 font-medium">Menu tidak ditemukan.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
             {searchResults.map((p) => <ProductCard key={p.id} product={p} />)}
           </div>
         )
       ) : activeCategory === "Semua" ? (
-        <div className="space-y-12">
+        <div className="space-y-10">
           {categories.map(cat => {
              const catProducts = getProductsByCategory(cat);
              if (catProducts.length === 0) return null;
              
-             const meta = categoryMeta.find(c => c.id === cat);
-             
              return (
-               <div key={cat} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                  <div className="flex items-center gap-3 mb-6 pb-3 border-b border-gray-100">
-                    <span className="text-3xl">{meta?.icon}</span>
-                    <h3 className="text-2xl font-black text-gray-900 tracking-tight">{cat}</h3>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+               <div key={cat} className="pt-2">
+                  <h3 className="text-[18px] font-semibold text-gray-900 mb-4 px-1">{cat}</h3>
+                  {/* Grid diatur agar mobile menampilkan 2 kolom (seperti FoodDash) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                     {catProducts.map(p => <ProductCard key={p.id} product={p} />)}
                   </div>
                </div>
@@ -158,7 +139,7 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
           })}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
           {getProductsByCategory(activeCategory).map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
