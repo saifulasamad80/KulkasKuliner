@@ -11,10 +11,8 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
   const [liveProducts, setLiveProducts] = useState(products);
 
   useEffect(() => {
-    // 1. Tampilkan data dari server (bisa jadi data lama karena Cache Next.js)
     setLiveProducts(products);
 
-    // 2. INJEKSI ANTI-CACHE: Detik itu juga, tarik data paling fresh dari Supabase diam-diam
     const fetchFreshestData = async () => {
       const { data, error } = await supabase
         .from('products')
@@ -23,12 +21,11 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
         .order('name', { ascending: true });
       
       if (data && !error) {
-        setLiveProducts(data); // Timpa data lama dengan realita terbaru
+        setLiveProducts(data); 
       }
     };
     fetchFreshestData();
 
-    // 3. MENGHIDUPKAN RADAR WEBSOCKET (Menangkap perubahan saat layar sedang ditatap)
     const channel = supabase
       .channel('public:products')
       .on(
@@ -51,10 +48,10 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [products]); // Efek ini akan berjalan ulang jika ada perpindahan halaman (routing)
+  }, [products]);
 
   const categoryMeta = [
-    { id: "Semua", label: "Semua" },
+    { id: "Semua", label: "All" }, // Diubah jadi 'All' biar makin persis referensi
     { id: "Pasta", label: "Pasta" },
     { id: "Kebab", label: "Kebab" },
     { id: "Durian", label: "Durian" },
@@ -63,6 +60,11 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
   ];
 
   const categories = categoryMeta.filter(c => c.id !== "Semua").map(c => c.id);
+
+  // LOGIKA ALGORITMA: Mengurutkan produk berdasarkan metrik Terjual tertinggi (maksimal 4 produk)
+  const popularProducts = [...liveProducts]
+    .sort((a, b) => (Number(b.rating_avg) || 0) - (Number(a.rating_avg) || 0))
+    .slice(0, 4);
 
   const getProductsByCategory = (cat: string) => {
     return liveProducts.filter((p) => {
@@ -89,14 +91,13 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
   return (
     <div className="w-full">
       
-      {/* AREA PINTAR (SEARCH & MENU KAPSUL FoodDash Style) */}
+      {/* AREA SEARCH & KAPSUL FILTER */}
       <div className="mb-8 space-y-4">
         
-        {/* Kolom Pencarian */}
         <div className="relative max-w-xl mx-auto">
           <input 
             type="text" 
-            placeholder="Cari makanan..." 
+            placeholder="Search for frozen food or meals..." 
             className="w-full pl-11 pr-4 py-[10px] bg-white border-none rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.08)] focus:ring-2 focus:ring-red-600 outline-none text-gray-700 text-[14px] transition-all"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -106,17 +107,17 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
           </svg>
         </div>
 
-        {/* Tombol Kapsul Filter */}
+        {/* TOMBOL KAPSUL GAYA FOODDASH (Abu-abu Balon / bg-gray-100) */}
         {!isSearching && (
           <div className="flex overflow-x-auto gap-2 pb-2 custom-scrollbar justify-start md:justify-center px-1">
             {categoryMeta.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`whitespace-nowrap px-4 py-2 rounded-full text-[13px] font-medium transition-all ${
+                className={`whitespace-nowrap px-4 py-2.5 rounded-full text-[13px] font-semibold transition-all ${
                   activeCategory === cat.id 
                     ? "bg-red-600 text-white shadow-sm" 
-                    : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent"
                 }`}
               >
                 {cat.label}
@@ -139,13 +140,28 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
         )
       ) : activeCategory === "Semua" ? (
         <div className="space-y-10">
+          
+          {/* INJEKSI: RAK MENU TERPOPULER DI POSISI PALING ATAS */}
+          {popularProducts.length > 0 && (
+            <div className="pt-2">
+              <h3 className="text-[18px] font-bold text-gray-900 mb-4 px-1 flex items-center gap-2">
+                Popular Menu 
+                <span className="text-red-500 text-[14px]">🔥</span>
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                {popularProducts.map(p => <ProductCard key={p.id} product={p} />)}
+              </div>
+            </div>
+          )}
+
+          {/* RAK KATEGORI LAINNYA DI BAWAHNYA */}
           {categories.map(cat => {
              const catProducts = getProductsByCategory(cat);
              if (catProducts.length === 0) return null;
              
              return (
-               <div key={cat} className="pt-2">
-                  <h3 className="text-[18px] font-semibold text-gray-900 mb-4 px-1">{cat}</h3>
+               <div key={cat} className="pt-4 border-t border-gray-100">
+                  <h3 className="text-[18px] font-bold text-gray-900 mb-4 px-1">{cat}</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                     {catProducts.map(p => <ProductCard key={p.id} product={p} />)}
                   </div>

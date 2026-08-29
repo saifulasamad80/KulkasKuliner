@@ -17,9 +17,12 @@ export default function ProductCard({ product }: { product: any }) {
 
   const fakeOriginalPrice = product.price * 1.2;
 
-  // REKAYASA KOLOM: Membaca kolom rating sebagai "Terjual" & "Favorit"
+  // LOGIKA DINAMIS: Cukup baca 1 kolom (rating_avg sebagai Total Terjual)
   const totalTerjual = product.rating_avg ? Math.floor(Number(product.rating_avg)) : 0;
-  const totalFavorit = product.rating_count || 0;
+  
+  // Jika terjual lebih dari 10, otomatis naik kasta jadi menu Favorit
+  const isFavorit = totalTerjual >= 10; 
+  
   const realDescription = product.description || "Deskripsi belum tersedia.";
 
   return (
@@ -34,35 +37,38 @@ export default function ProductCard({ product }: { product: any }) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
         
-        {/* BADGE SCARCITY */}
+        {/* BADGE SCARCITY (Muncul jika stok menipis) */}
         {(product.stock > 0 && product.stock <= 4) && (
           <div className="absolute top-2 left-2 bg-orange-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1 animate-pulse z-10">
             <span>🔥</span> SISA {product.stock}!
           </div>
         )}
 
-        {/* BADGE POPULER */}
-        {(product.name.toLowerCase().includes('durian') || product.name.toLowerCase().includes('bebek')) && (
+        {/* BADGE POPULER OTOMATIS (Tanpa hardcode lagi) */}
+        {isFavorit && (
           <div className="absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1 z-10">
             <span>⭐</span> POPULER
           </div>
         )}
       </div>
 
-      {/* AREA DESKRIPSI (Metrik Penjualan & Favorit) */}
+      {/* AREA DESKRIPSI */}
       <div className="p-[16px] flex flex-col flex-1 bg-white">
         
         <div className="flex justify-between items-start mb-0.5 gap-2">
           <h3 className="font-semibold text-gray-900 text-[15px] leading-[20px] line-clamp-2">{product.name}</h3>
           
-          {/* INJEKSI: Metrik Total Terjual & Favorit yang kebal kritik */}
           <div className="flex flex-col items-end shrink-0">
+            {/* Hanya Tampilkan Angka Terjual */}
             <div className="flex items-center gap-1 text-[12px] font-bold text-gray-700">
               <span className="text-orange-500 text-[14px]">🛒</span> {totalTerjual} Terjual
             </div>
-            <div className="flex items-center gap-1 text-[11px] text-gray-400 font-medium mt-0.5">
-              <span className="text-red-400 text-[12px]">❤️</span> {totalFavorit} Favorit
-            </div>
+            {/* Label Favorit tanpa angka */}
+            {isFavorit && (
+              <div className="flex items-center gap-1 text-[11px] text-red-500 font-bold mt-0.5 bg-red-50 px-1.5 py-0.5 rounded">
+                ❤️ Favorit
+              </div>
+            )}
           </div>
         </div>
 
