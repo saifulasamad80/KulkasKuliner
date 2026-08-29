@@ -4,7 +4,7 @@
   "description": "Distributor Frozen Food Premium Siap Antar",
   "start_url": "/?source=pwa",
   "display": "standalone",
-  "background_color": "#1e3a8a",
+  "background_color": "#fdfbf7",
   "theme_color": "#1e3a8a",
   "icons": [
     {
