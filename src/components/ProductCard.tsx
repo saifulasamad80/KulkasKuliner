@@ -17,11 +17,11 @@ export default function ProductCard({ product }: { product: any }) {
 
   const fakeOriginalPrice = product.price * 1.2;
 
-  // INJEKSI KOSMETIK: Membuat Rating & Ulasan Palsu yang Konsisten (Deterministic)
-  // Menghasilkan angka rating 4.5 s/d 4.9 berdasarkan panjang nama produk
-  const fakeRating = (4.5 + (product.name.length % 5) * 0.1).toFixed(1);
-  // Menghasilkan jumlah ulasan ratusan yang terlihat meyakinkan
-  const fakeReviews = 120 + (product.name.length * 15);
+  // MENGAMBIL DATA NYATA DARI DATABASE (Tinggalkan Kosmetik Palsu)
+  // Fallback: Jika di database kosong (null), kita tampilkan nilai default yang wajar
+  const realRating = product.rating_avg ? Number(product.rating_avg).toFixed(1) : "0.0";
+  const realReviews = product.rating_count || 0;
+  const realDescription = product.description || "Frozen food siap saji.";
 
   return (
     <div className="bg-white rounded-[12px] shadow-sm hover:shadow-md border border-gray-100 overflow-hidden flex flex-col h-full transition-all duration-200 relative group">
@@ -50,26 +50,25 @@ export default function ProductCard({ product }: { product: any }) {
         )}
       </div>
 
-      {/* AREA DESKRIPSI (Meniru Anatomi FoodDash) */}
+      {/* AREA DESKRIPSI NYATA */}
       <div className="p-[16px] flex flex-col flex-1 bg-white">
         
-        {/* Baris 1: Judul dan Bintang Rating */}
         <div className="flex justify-between items-start mb-0.5 gap-2">
           <h3 className="font-semibold text-gray-900 text-[15px] leading-[20px] line-clamp-2">{product.name}</h3>
           <div className="flex flex-col items-end shrink-0">
             <div className="flex items-center gap-1 text-[13px] font-bold text-gray-900">
-              <span className="text-yellow-400 text-[14px]">★</span> {fakeRating}
+              <span className="text-yellow-400 text-[14px]">★</span> {realRating}
             </div>
-            <span className="text-[11px] text-gray-400 font-medium">({fakeReviews})</span>
+            <span className="text-[11px] text-gray-400 font-medium">({realReviews})</span>
           </div>
         </div>
 
-        {/* Baris 2: Sub-judul (Kategori) */}
+        {/* Deskripsi Asli dari Supabase */}
         <p className="text-[12px] text-gray-500 mb-2 truncate font-medium">
-          Frozen Food Premium, Siap Saji
+          {realDescription}
         </p>
 
-        {/* Baris 3: Estimasi Waktu (Seperti di gambar lu: 20-30 min • $$) */}
+        {/* Waktu Estimasi */}
         <div className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 mb-3">
           <span className="flex items-center gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -83,13 +82,11 @@ export default function ProductCard({ product }: { product: any }) {
           <span>$$</span>
         </div>
         
-        {/* Harga */}
         <div className="flex items-center gap-2 mb-3 mt-auto">
           <p className="text-[16px] font-bold text-gray-900">Rp {product.price.toLocaleString('id-ID')}</p>
           <p className="text-[12px] font-medium text-gray-400 line-through">Rp {fakeOriginalPrice.toLocaleString('id-ID')}</p>
         </div>
 
-        {/* Status Stok */}
         <div className="mb-3">
           {product.stock <= 0 ? (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-red-50 text-red-600">
@@ -108,7 +105,6 @@ export default function ProductCard({ product }: { product: any }) {
           )}
         </div>
 
-        {/* TOMBOL CTA (FoodDash Primary: #DC2626, Pill Shape) */}
         <button
           onClick={handleAdd}
           disabled={isOutOfStock}
@@ -118,11 +114,7 @@ export default function ProductCard({ product }: { product: any }) {
               : "bg-red-600 text-white hover:bg-red-700 hover:shadow-md"
           }`}
         >
-          {isOutOfStock ? (
-            "Stok Habis"
-          ) : (
-            "Order Now"
-          )}
+          {isOutOfStock ? "Stok Habis" : "Order Now"}
         </button>
       </div>
     </div>
