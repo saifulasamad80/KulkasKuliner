@@ -22,8 +22,6 @@ export default function CartPage() {
   useEffect(() => {
     setIsClient(true);
     
-    // Sinkronisasi ini TETAP ADA untuk mencegah pembeli memasukkan barang yang benar-benar fisik sudah habis (0).
-    // Tapi fungsi ini TIDAK memotong stok saat checkout.
     const syncCartWithDB = async () => {
       const currentItems = useCartStore.getState().items;
       const itemIds = currentItems.map(i => i.id);
@@ -63,16 +61,13 @@ export default function CartPage() {
 
   const totalAmount = items.reduce((total, item) => total + item.price * item.quantity, 0);
 
-  // RESOLUSI UX: Validasi Input Keamanan Tingkat Tinggi (Regex)
   const validateCheckoutForm = (nama: string, wa: string) => {
-    // Validasi Nama: Hanya Huruf dan Spasi (3-50 karakter).
     const nameRegex = /^[a-zA-Z\s']{3,50}$/;
     if (!nameRegex.test(nama)) {
       alert("NAMA DITOLAK: Hanya boleh berisi huruf dan spasi (Minimal 3 karakter). Dilarang menggunakan angka atau simbol aneh.");
       return null;
     }
 
-    // Validasi WA: Bersihkan spasi/strip, pastikan hanya angka, diawali 08 atau 62, panjang 9-14 digit.
     const cleanWa = wa.replace(/\D/g, ''); 
     const waRegex = /^(08|628)[0-9]{7,12}$/;
     if (!waRegex.test(cleanWa)) {
@@ -80,7 +75,6 @@ export default function CartPage() {
       return null;
     }
 
-    // Standardisasi ke format 62
     const formattedWa = cleanWa.startsWith('0') ? '62' + cleanWa.substring(1) : cleanWa;
     
     return { cleanName: nama.trim(), cleanWa: formattedWa };
@@ -89,14 +83,12 @@ export default function CartPage() {
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // 1. Eksekusi Validasi
     const validated = validateCheckoutForm(formData.name, formData.phone);
-    if (!validated) return; // Hentikan proses jika form kotor
+    if (!validated) return;
 
     setIsLoading(true);
 
     try {
-      // 2. Generate Order ID (Lokal)
       const dateObj = new Date();
       const yy = String(dateObj.getFullYear()).slice(-2);
       const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -106,23 +98,23 @@ export default function CartPage() {
       const ss = String(dateObj.getSeconds()).padStart(2, '0');
       const orderNumber = `KUL-${yy}${mm}${dd}-${hh}${min}${ss}`;
 
-      // 3. Simpan ke Supabase tabel 'orders' DENGAN STATUS PENDING (TIDAK potong stok)
       const { error: dbError } = await supabase
         .from('orders')
         .insert({
+          order_number: orderNumber,
           order_id: orderNumber,
           customer_name: validated.cleanName,
           customer_phone: validated.cleanWa,
+          shipping_address: formData.address,
           customer_address: formData.address,
           notes: formData.notes,
           total_amount: totalAmount,
-          items: items, // Simpan array JSON
-          status: 'PENDING'
+          items: items,
+          status: 'unpaid'
         });
 
       if (dbError) throw new Error(dbError.message);
 
-      // 4. Tarik Nomor WA Admin
       let adminPhone = "628889560447"; 
       const { data: waData, error: waError } = await supabase
         .from('store_settings')
@@ -134,7 +126,6 @@ export default function CartPage() {
          adminPhone = waData.setting_value; 
       }
 
-      // 5. Rakit Struk WA yang lebih bersih dan terstruktur
       const orderDetails = items.map(item => `- ${item.quantity}x ${item.name} (Rp ${(item.price * item.quantity).toLocaleString('id-ID')})`).join('\n');
       const notesSection = formData.notes.trim() !== '' ? `\n\n*Catatan Tambahan:*\n_${formData.notes}_` : '';
 
