@@ -28,7 +28,6 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-gray-50 relative">
       
-      {/* PINTU RAHASIA ADMIN */}
       <Link 
         href="/admin" 
         className="absolute top-4 right-4 z-50 bg-black/30 hover:bg-black/50 backdrop-blur-sm text-white/80 hover:text-white px-3 py-1.5 rounded text-xs font-bold transition-all border border-white/20"
@@ -36,7 +35,6 @@ export default async function Home() {
         Login Admin
       </Link>
 
-      {/* HERO SECTION */}
       <section className="bg-blue-900 text-white relative overflow-hidden">
         <div className="absolute inset-0 opacity-20">
            <img src="/kulkul.jpeg" alt="Background" className="w-full h-full object-cover" />
@@ -56,7 +54,6 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* KATALOG SECTION */}
       <section id="katalog" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {(!products || products.length === 0) ? (
           <div className="bg-white p-12 text-center rounded-2xl shadow-sm border border-gray-200 mt-10">

@@ -7,7 +7,6 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Semua");
 
-  // RESOLUSI UX: Pemetaan Kategori dengan Visual Anchor (Emoji)
   const categoryMeta = [
     { id: "Semua", label: "Semua", icon: "🔥" },
     { id: "Pasta", label: "Pasta", icon: "🍝" },
@@ -17,10 +16,8 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
     { id: "Lauk & Cemilan", label: "Lauk & Cemilan", icon: "🍗" }
   ];
 
-  // Ekstraksi ID untuk logika filter
   const categories = categoryMeta.filter(c => c.id !== "Semua").map(c => c.id);
 
-  // Mesin Logika Klasifikasi Produk (Tetap Akurat)
   const getProductsByCategory = (cat: string) => {
     return products.filter((p) => {
       const nameLower = p.name.toLowerCase();
@@ -45,11 +42,7 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
 
   return (
     <div className="w-full">
-      
-      {/* AREA PINTAR (SEARCH & MENU KAPSUL) */}
       <div className="mb-12 space-y-6">
-        
-        {/* Kolom Pencarian */}
         <div className="relative max-w-xl mx-auto">
           <input 
             type="text" 
@@ -63,7 +56,6 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
           </svg>
         </div>
 
-        {/* Tombol Kapsul (Visual Menu FOMO) */}
         {!isSearching && (
           <div className="flex overflow-x-auto gap-3 pb-4 custom-scrollbar justify-start md:justify-center px-2 pt-2">
             {categoryMeta.map((cat) => (
@@ -84,9 +76,7 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
         )}
       </div>
 
-      {/* AREA ETALASE PRODUK */}
       {isSearching ? (
-        // MODE 1: Hasil Pencarian
         searchResults.length === 0 ? (
           <div className="bg-white p-12 text-center rounded-2xl border border-dashed border-gray-300">
              <p className="text-gray-500 font-bold">Menu "{searchQuery}" tidak ditemukan.</p>
@@ -97,15 +87,11 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
           </div>
         )
       ) : activeCategory === "Semua" ? (
-        // MODE 2: Etalase Terkelompok (GoFood Style dengan Header Emoji)
         <div className="space-y-12">
           {categories.map(cat => {
              const catProducts = getProductsByCategory(cat);
              if (catProducts.length === 0) return null;
-             
-             // Ambil emoji untuk header
              const meta = categoryMeta.find(c => c.id === cat);
-             
              return (
                <div key={cat} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                   <div className="flex items-center gap-3 mb-6 pb-3 border-b border-gray-100">
@@ -120,14 +106,12 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
           })}
         </div>
       ) : (
-        // MODE 3: Fokus 1 Kategori (Jika Kapsul diklik)
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {getProductsByCategory(activeCategory).map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
         </div>
       )}
-
     </div>
   );
 }

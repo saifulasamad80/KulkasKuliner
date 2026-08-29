@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import PwaInstallButton from "@/components/PwaInstallButton";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,7 +12,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// RESOLUSI MUTLAK: Metadata lengkap dengan PWA Manifest dan Absolute URL Open Graph
 export const metadata: Metadata = {
   metadataBase: new URL('https://kulkaskuliner.vercel.app'),
   title: "KulkasKuliner | Agen Frozen Food Premium Jakarta Timur",
@@ -49,17 +47,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="id" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased scroll-smooth`}>
       <body className="min-h-full flex flex-col">
         {children}
         
-        {/* RESOLUSI PWA: Tombol Install Kustom yang mencegat mesin Chrome */}
-        <PwaInstallButton />
-        
-        {/* Registrasi Service Worker PWA secara asinkronus agar PWA hidup */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
