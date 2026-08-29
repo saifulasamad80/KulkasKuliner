@@ -18,10 +18,9 @@ export default function AdminDashboard() {
   
   const [isAdding, setIsAdding] = useState(false);
   
-  // STATE BARU: Ditambah description, rating_avg, dan rating_count
-  const [newProduct, setNewProduct] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0.0, rating_count: 0 });
+  const [newProduct, setNewProduct] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0, rating_count: 0 });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0.0, rating_count: 0 });
+  const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0, rating_count: 0 });
 
   useEffect(() => {
     const savedSession = sessionStorage.getItem('kuliner_admin_auth');
@@ -72,7 +71,7 @@ export default function AdminDashboard() {
     else { 
       alert("Produk ditambah!"); 
       setIsAdding(false); 
-      setNewProduct({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0.0, rating_count: 0 }); 
+      setNewProduct({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0, rating_count: 0 }); 
       fetchData(); 
     }
   };
@@ -151,7 +150,7 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* FORM TAMBAH PRODUK (DIPERBARUI) */}
+          {/* FORM TAMBAH PRODUK (DENGAN LABEL BARU) */}
           {isAdding && (
             <form onSubmit={handleAddProduct} className="mb-6 bg-green-50 p-4 border border-green-200 rounded-lg space-y-3 shadow-inner">
               <input type="text" placeholder="Nama Produk" required 
@@ -173,11 +172,11 @@ export default function AdminDashboard() {
                 />
               </div>
               <div className="flex gap-2">
-                <input type="number" step="0.1" placeholder="Rating (Misal: 4.8)"
+                <input type="number" placeholder="Total Terjual (Manual)"
                   className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
-                  value={newProduct.rating_avg || ''} onChange={e => setNewProduct({...newProduct, rating_avg: parseFloat(e.target.value)})} 
+                  value={newProduct.rating_avg || ''} onChange={e => setNewProduct({...newProduct, rating_avg: parseInt(e.target.value)})} 
                 />
-                <input type="number" placeholder="Jumlah Ulasan (Misal: 150)"
+                <input type="number" placeholder="Total Favorit (Manual)"
                   className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
                   value={newProduct.rating_count || ''} onChange={e => setNewProduct({...newProduct, rating_count: parseInt(e.target.value)})} 
                 />
@@ -194,7 +193,7 @@ export default function AdminDashboard() {
             {products.map((prod) => (
               <div key={prod.id} className={`p-4 border rounded-xl flex flex-col gap-3 transition-colors ${!prod.is_active ? 'bg-gray-100 opacity-70' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
                 
-                {/* FORM EDIT PRODUK (DIPERBARUI) */}
+                {/* FORM EDIT PRODUK (DENGAN LABEL BARU) */}
                 {editingId === prod.id ? (
                   <div className="space-y-2 bg-blue-50/50 p-2 -mx-2 rounded-lg border border-blue-100">
                     <input type="text" placeholder="Nama Produk"
@@ -216,11 +215,11 @@ export default function AdminDashboard() {
                       />
                     </div>
                     <div className="flex gap-2">
-                      <input type="number" step="0.1" placeholder="Rating"
+                      <input type="number" placeholder="Total Terjual"
                         className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
-                        value={editForm.rating_avg || ''} onChange={e => setEditForm({...editForm, rating_avg: parseFloat(e.target.value)})} 
+                        value={editForm.rating_avg || ''} onChange={e => setEditForm({...editForm, rating_avg: parseInt(e.target.value)})} 
                       />
-                      <input type="number" placeholder="Jml Ulasan"
+                      <input type="number" placeholder="Total Favorit"
                         className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
                         value={editForm.rating_count || ''} onChange={e => setEditForm({...editForm, rating_count: parseInt(e.target.value)})} 
                       />
@@ -259,7 +258,7 @@ export default function AdminDashboard() {
                             stock: prod.stock, 
                             image_url: prod.image_url,
                             description: prod.description || '',
-                            rating_avg: prod.rating_avg || 0.0,
+                            rating_avg: prod.rating_avg || 0,
                             rating_count: prod.rating_count || 0
                           }); 
                         }} 

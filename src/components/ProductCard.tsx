@@ -17,9 +17,9 @@ export default function ProductCard({ product }: { product: any }) {
 
   const fakeOriginalPrice = product.price * 1.2;
 
-  // MENGAMBIL DATA NYATA DARI DATABASE
-  const realRating = product.rating_avg ? Number(product.rating_avg).toFixed(1) : "0.0";
-  const realReviews = product.rating_count || 0;
+  // REKAYASA KOLOM: Membaca kolom rating sebagai "Terjual" & "Favorit"
+  const totalTerjual = product.rating_avg ? Math.floor(Number(product.rating_avg)) : 0;
+  const totalFavorit = product.rating_count || 0;
   const realDescription = product.description || "Deskripsi belum tersedia.";
 
   return (
@@ -41,7 +41,7 @@ export default function ProductCard({ product }: { product: any }) {
           </div>
         )}
 
-        {/* BADGE HERO PRODUCT */}
+        {/* BADGE POPULER */}
         {(product.name.toLowerCase().includes('durian') || product.name.toLowerCase().includes('bebek')) && (
           <div className="absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1 z-10">
             <span>⭐</span> POPULER
@@ -49,28 +49,26 @@ export default function ProductCard({ product }: { product: any }) {
         )}
       </div>
 
-      {/* AREA DESKRIPSI NYATA */}
+      {/* AREA DESKRIPSI (Metrik Penjualan & Favorit) */}
       <div className="p-[16px] flex flex-col flex-1 bg-white">
         
         <div className="flex justify-between items-start mb-0.5 gap-2">
           <h3 className="font-semibold text-gray-900 text-[15px] leading-[20px] line-clamp-2">{product.name}</h3>
+          
+          {/* INJEKSI: Metrik Total Terjual & Favorit yang kebal kritik */}
           <div className="flex flex-col items-end shrink-0">
-            <div className="flex items-center gap-1 text-[13px] font-bold text-gray-900">
-              <span className="text-yellow-400 text-[14px]">★</span> {realRating}
+            <div className="flex items-center gap-1 text-[12px] font-bold text-gray-700">
+              <span className="text-orange-500 text-[14px]">🛒</span> {totalTerjual} Terjual
             </div>
-            <span className="text-[11px] text-gray-400 font-medium">({realReviews})</span>
+            <div className="flex items-center gap-1 text-[11px] text-gray-400 font-medium mt-0.5">
+              <span className="text-red-400 text-[12px]">❤️</span> {totalFavorit} Favorit
+            </div>
           </div>
         </div>
 
-        {/* 
-          Deskripsi Asli dari Supabase 
-          Catatan: Pakai line-clamp-2 agar maksimal 2 baris (anti-jebol)
-        */}
-        <p className="text-[12px] text-gray-500 mb-3 line-clamp-2 font-medium leading-relaxed">
+        <p className="text-[12px] text-gray-500 mb-3 line-clamp-2 font-medium leading-relaxed mt-2">
           {realDescription}
         </p>
-
-        {/* BLOK WAKTU ESTIMASI SUDAH DIHANCURKAN DARI SINI */}
         
         <div className="flex items-center gap-2 mb-3 mt-auto">
           <p className="text-[16px] font-bold text-gray-900">Rp {product.price.toLocaleString('id-ID')}</p>

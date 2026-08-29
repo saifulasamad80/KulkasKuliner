@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import HeaderCart from '@/components/HeaderCart'; // INJEKSI KERANJANG HEADER
+import HeaderCart from '@/components/HeaderCart'; 
 import Link from 'next/link';
 import PwaInstallButton from '@/components/PwaInstallButton';
 import CatalogBrowser from '@/components/CatalogBrowser';
@@ -28,12 +28,12 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-white relative pb-20">
       
-      {/* BANNER PROMO */}
-      <div className="bg-orange-600 text-white text-[12px] md:text-sm font-bold text-center py-2.5 px-4 shadow-sm relative z-50">
-        🔥 PROMO HARI INI: Order via Website masuk antrean VIP & dapat Subsidi Ongkir!
+      {/* BANNER PROMO YANG SUDAH JINAK (AMAN UNTUK DOMPET) */}
+      <div className="bg-orange-600 text-white text-[12px] md:text-sm font-bold text-center py-2.5 px-4 shadow-sm relative z-50 tracking-wide">
+        🔥 PROMO HARI INI: Nikmati Harga Spesial & Otomatis Masuk Antrean VIP via Website!
       </div>
 
-      {/* HEADER NAVIGASI ALA FOODDASH DENGAN KERANJANG BARU */}
+      {/* HEADER NAVIGASI */}
       <header className="bg-white sticky top-0 z-40 border-b border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.03)] backdrop-blur-md bg-white/90">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[65px] flex items-center justify-between">
           <div className="font-black text-2xl tracking-tight text-gray-900">
@@ -44,7 +44,6 @@ export default async function Home() {
             <Link href="/admin" className="text-[12px] font-bold text-gray-500 hover:text-red-600 transition-colors bg-gray-50 hover:bg-red-50 px-3.5 py-1.5 rounded-full border border-gray-200 hover:border-red-200 active:scale-95 hidden sm:block">
               Login Admin
             </Link>
-            {/* KERANJANG SEKARANG BERADA DI ATAS SINI */}
             <HeaderCart /> 
           </div>
         </div>
@@ -98,8 +97,6 @@ export default async function Home() {
           )}
         </div>
       </section>
-
-      {/* FLOATING CART DIHAPUS DARI SINI */}
       
     </main>
   );
