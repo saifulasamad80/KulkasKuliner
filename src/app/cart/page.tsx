@@ -115,6 +115,23 @@ export default function CartPage() {
 
       if (dbError) throw new Error(dbError.message);
 
+      // INJEKSI TELEGRAM NOTIFIKASI
+      try {
+        await fetch('/api/telegram/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            order_id: orderNumber,
+            customer_name: validated.cleanName,
+            total_amount: totalAmount,
+            items_detail: items.map(item => `- ${item.quantity}x ${item.name}`).join('\n')
+          })
+        });
+      } catch (tgError) {
+        console.error("Gagal mengirim Telegram", tgError);
+        // Error telegram diabaikan, pelanggan tetap lanjut ke WA
+      }
+
       let adminPhone = "628889560447"; 
       const { data: waData, error: waError } = await supabase
         .from('store_settings')
