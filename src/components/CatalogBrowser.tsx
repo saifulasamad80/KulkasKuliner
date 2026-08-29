@@ -1,11 +1,48 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ProductCard from './ProductCard';
+import { supabase } from '@/lib/supabase'; // INJEKSI: Memanggil mesin Supabase
 
 export default function CatalogBrowser({ products }: { products: any[] }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Semua");
+  
+  // RESOLUSI NRT: Memindahkan produk statis menjadi State yang hidup
+  const [liveProducts, setLiveProducts] = useState(products);
+
+  useEffect(() => {
+    // Memastikan state sinkron jika ada perubahan data dari server (refresh)
+    setLiveProducts(products);
+
+    // MENGHIDUPKAN RADAR WEBSOCKET SUPABASE
+    const channel = supabase
+      .channel('public:products')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' }, // Dengarkan Update, Insert, & Delete
+        (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            // Jika ada stok berkurang, langsung timpa angka di layar
+            setLiveProducts((current) => 
+              current.map((p) => (p.id === payload.new.id ? { ...p, ...payload.new } : p))
+            );
+          } else if (payload.eventType === 'INSERT') {
+            // Jika lu tambah menu baru dari Admin, langsung muncul tanpa refresh
+            setLiveProducts((current) => [...current, payload.new]);
+          } else if (payload.eventType === 'DELETE') {
+            // Jika menu dihapus, langsung hilang dari layar
+            setLiveProducts((current) => current.filter((p) => p.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    // Mematikan radar jika pembeli pindah halaman (Mencegah kebocoran memori RAM)
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [products]);
 
   const categoryMeta = [
     { id: "Semua", label: "Semua", icon: "🔥" },
@@ -18,8 +55,9 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
 
   const categories = categoryMeta.filter(c => c.id !== "Semua").map(c => c.id);
 
+  // Filter sekarang menggunakan liveProducts (Data yang sudah tersambung radar)
   const getProductsByCategory = (cat: string) => {
-    return products.filter((p) => {
+    return liveProducts.filter((p) => {
       const nameLower = p.name.toLowerCase();
       if (cat === "Pasta") return nameLower.includes("pasta");
       if (cat === "Kebab") return nameLower.includes("kebab");
@@ -37,7 +75,7 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
 
   const isSearching = searchQuery.trim() !== "";
   const searchResults = isSearching 
-    ? products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? liveProducts.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
 
   return (
@@ -60,21 +98,19 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
           </svg>
         </div>
 
-        {/* Tombol Kapsul (Visual Menu FOMO Upgrade - Avatar Pill) */}
+        {/* Tombol Kapsul */}
         {!isSearching && (
           <div className="flex overflow-x-auto gap-3 pb-4 custom-scrollbar justify-start md:justify-center px-2 pt-2">
             {categoryMeta.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                // RESOLUSI UX: Padding asimetris (kiri sempit, kanan lebar) menciptakan bentuk pil modern
                 className={`flex items-center gap-3 whitespace-nowrap pl-1.5 pr-5 py-1.5 rounded-full text-sm font-black transition-all duration-300 ${
                   activeCategory === cat.id 
                     ? "bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-[0_4px_15px_rgba(37,99,235,0.4)] scale-105 border border-transparent" 
                     : "bg-white text-gray-900 border-2 border-gray-100 shadow-[0_4px_10px_rgba(0,0,0,0.06)] hover:border-blue-200 hover:text-blue-700 hover:shadow-md hover:-translate-y-0.5"
                 }`}
               >
-                {/* RESOLUSI UX: Membungkus Emoji dengan Lingkaran (Avatar) */}
                 <div className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors shadow-inner ${
                   activeCategory === cat.id
                     ? "bg-white/20"
