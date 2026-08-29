@@ -28,33 +28,30 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-white relative pb-20">
       
-      {/* BANNER PROMO */}
       <div className="bg-orange-600 text-white text-[12px] md:text-sm font-bold text-center py-2.5 px-4 shadow-sm relative z-50 tracking-wide">
         🔥 PROMO HARI INI: Nikmati Harga Spesial & Otomatis Masuk Antrean VIP via Website!
       </div>
 
-      {/* HEADER NAVIGASI */}
       <header className="bg-white sticky top-0 z-40 border-b border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.03)] backdrop-blur-md bg-white/90">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[65px] flex items-center justify-between">
           <div className="font-black text-2xl tracking-tight text-gray-900">
             <span className="text-red-600">Kulkas</span>Kuliner
           </div>
           
-          <div className="flex items-center gap-4 md:gap-6">
-            <Link href="/admin" className="text-[12px] font-bold text-gray-500 hover:text-red-600 transition-colors bg-gray-50 hover:bg-red-50 px-3.5 py-1.5 rounded-full border border-gray-200 hover:border-red-200 active:scale-95 hidden sm:block">
-              Login Admin
+          {/* PERBAIKAN: Tombol Admin sekarang muncul di HP dengan ukuran compact */}
+          <div className="flex items-center gap-3 md:gap-6">
+            <Link href="/admin" className="text-[10px] md:text-[12px] font-bold text-gray-500 hover:text-red-600 transition-colors bg-gray-50 hover:bg-red-50 px-2.5 py-1.5 md:px-3.5 md:py-1.5 rounded-full border border-gray-200 hover:border-red-200 active:scale-95">
+              Admin
             </Link>
             <HeaderCart /> 
           </div>
         </div>
       </header>
 
-      {/* HERO SECTION */}
       <section className="bg-white pt-8 pb-12 md:pt-16 md:pb-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
             
             <div className="text-center md:text-left z-10 order-2 md:order-1">
-               {/* COPYWRITING BARU: STOK KULKAS AMAN */}
                <h1 className="text-4xl md:text-5xl lg:text-[54px] font-black text-gray-900 leading-[1.1] mb-5 tracking-tight">
                   Stok Kulkas Aman,<br/>
                   <span className="text-red-600 drop-shadow-sm">Perut Kenyang.</span>
@@ -81,7 +78,6 @@ export default async function Home() {
          </div>
       </section>
 
-      {/* CATALOG SECTION */}
       <section id="katalog" className="bg-gray-50 pt-10 pb-16 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-6 px-1">
