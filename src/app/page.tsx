@@ -28,7 +28,7 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-white relative pb-20">
       
-      {/* BANNER PROMO YANG SUDAH JINAK (AMAN UNTUK DOMPET) */}
+      {/* BANNER PROMO */}
       <div className="bg-orange-600 text-white text-[12px] md:text-sm font-bold text-center py-2.5 px-4 shadow-sm relative z-50 tracking-wide">
         🔥 PROMO HARI INI: Nikmati Harga Spesial & Otomatis Masuk Antrean VIP via Website!
       </div>
@@ -54,8 +54,9 @@ export default async function Home() {
          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
             
             <div className="text-center md:text-left z-10 order-2 md:order-1">
+               {/* COPYWRITING BARU: STOK KULKAS AMAN */}
                <h1 className="text-4xl md:text-5xl lg:text-[54px] font-black text-gray-900 leading-[1.1] mb-5 tracking-tight">
-                  Stok Dapur Aman,<br/>
+                  Stok Kulkas Aman,<br/>
                   <span className="text-red-600 drop-shadow-sm">Perut Kenyang.</span>
                </h1>
                <p className="text-gray-600 text-[15px] md:text-[17px] mb-8 max-w-lg mx-auto md:mx-0 leading-relaxed font-medium">
