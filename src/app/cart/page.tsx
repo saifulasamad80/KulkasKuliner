@@ -12,7 +12,6 @@ export default function CartPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [syncingStock, setSyncingStock] = useState(true);
   
-  // RESOLUSI UX: Penambahan state 'notes' untuk catatan pembeli
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -23,6 +22,8 @@ export default function CartPage() {
   useEffect(() => {
     setIsClient(true);
     
+    // Sinkronisasi ini TETAP ADA untuk mencegah pembeli memasukkan barang yang benar-benar fisik sudah habis (0).
+    // Tapi fungsi ini TIDAK memotong stok saat checkout.
     const syncCartWithDB = async () => {
       const currentItems = useCartStore.getState().items;
       const itemIds = currentItems.map(i => i.id);
@@ -62,22 +63,67 @@ export default function CartPage() {
 
   const totalAmount = items.reduce((total, item) => total + item.price * item.quantity, 0);
 
+  // RESOLUSI UX: Validasi Input Keamanan Tingkat Tinggi (Regex)
+  const validateCheckoutForm = (nama: string, wa: string) => {
+    // Validasi Nama: Hanya Huruf dan Spasi (3-50 karakter).
+    const nameRegex = /^[a-zA-Z\s']{3,50}$/;
+    if (!nameRegex.test(nama)) {
+      alert("NAMA DITOLAK: Hanya boleh berisi huruf dan spasi (Minimal 3 karakter). Dilarang menggunakan angka atau simbol aneh.");
+      return null;
+    }
+
+    // Validasi WA: Bersihkan spasi/strip, pastikan hanya angka, diawali 08 atau 62, panjang 9-14 digit.
+    const cleanWa = wa.replace(/\D/g, ''); 
+    const waRegex = /^(08|628)[0-9]{7,12}$/;
+    if (!waRegex.test(cleanWa)) {
+      alert("NOMOR WA DITOLAK: Harus berupa angka, diawali 08 atau 628, dan panjangnya 9-14 digit (contoh: 08123456789).");
+      return null;
+    }
+
+    // Standardisasi ke format 62
+    const formattedWa = cleanWa.startsWith('0') ? '62' + cleanWa.substring(1) : cleanWa;
+    
+    return { cleanName: nama.trim(), cleanWa: formattedWa };
+  };
+
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 1. Eksekusi Validasi
+    const validated = validateCheckoutForm(formData.name, formData.phone);
+    if (!validated) return; // Hentikan proses jika form kotor
+
     setIsLoading(true);
 
     try {
-      const { data: orderNumber, error } = await supabase.rpc('process_checkout', {
-        c_name: formData.name,
-        c_phone: formData.phone,
-        c_address: formData.address,
-        items: items.map(item => ({ p_id: item.id, qty: item.quantity }))
-      });
+      // 2. Generate Order ID (Lokal)
+      const dateObj = new Date();
+      const yy = String(dateObj.getFullYear()).slice(-2);
+      const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const dd = String(dateObj.getDate()).padStart(2, '0');
+      const hh = String(dateObj.getHours()).padStart(2, '0');
+      const min = String(dateObj.getMinutes()).padStart(2, '0');
+      const ss = String(dateObj.getSeconds()).padStart(2, '0');
+      const orderNumber = `KUL-${yy}${mm}${dd}-${hh}${min}${ss}`;
 
-      if (error) throw new Error(error.message);
+      // 3. Simpan ke Supabase tabel 'orders' DENGAN STATUS PENDING (TIDAK potong stok)
+      const { error: dbError } = await supabase
+        .from('orders')
+        .insert({
+          order_id: orderNumber,
+          customer_name: validated.cleanName,
+          customer_phone: validated.cleanWa,
+          customer_address: formData.address,
+          notes: formData.notes,
+          total_amount: totalAmount,
+          items: items, // Simpan array JSON
+          status: 'PENDING'
+        });
 
+      if (dbError) throw new Error(dbError.message);
+
+      // 4. Tarik Nomor WA Admin
       let adminPhone = "628889560447"; 
-      
       const { data: waData, error: waError } = await supabase
         .from('store_settings')
         .select('setting_value')
@@ -88,14 +134,11 @@ export default function CartPage() {
          adminPhone = waData.setting_value; 
       }
 
-      // Merakit struk pesanan barang
+      // 5. Rakit Struk WA yang lebih bersih dan terstruktur
       const orderDetails = items.map(item => `- ${item.quantity}x ${item.name} (Rp ${(item.price * item.quantity).toLocaleString('id-ID')})`).join('\n');
-      
-      // Merakit format catatan (jika ada)
       const notesSection = formData.notes.trim() !== '' ? `\n\n*Catatan Tambahan:*\n_${formData.notes}_` : '';
 
-      // RESOLUSI WHATSAPP: Format pesan yang lebih detail
-      const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya.\n\n*ORDER ID: ${orderNumber}*\n\n*Pesanan:*\n${orderDetails}\n\n*Total Belanja:* Rp ${totalAmount.toLocaleString('id-ID')}${notesSection}\n\nMohon cek sistem untuk detail alamat saya, dan infokan ongkos kirim Instan/Sameday beserta total transfer.\n\nTerima kasih.`;
+      const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya.\n\n*ORDER ID: ${orderNumber}*\n*Nama:* ${validated.cleanName}\n*No. WA:* ${validated.cleanWa}\n\n*Pesanan:*\n${orderDetails}\n\n*Total Belanja:* Rp ${totalAmount.toLocaleString('id-ID')}${notesSection}\n\nMohon cek sistem untuk detail alamat saya, dan infokan ongkos kirim Instan/Sameday beserta total transfer.\n\nTerima kasih.`;
       
       const waUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
 
@@ -104,7 +147,7 @@ export default function CartPage() {
 
     } catch (error: any) {
       console.error("Kesalahan Transaksi Internal:", error.message);
-      alert('Maaf, transaksi gagal diproses oleh sistem keamanan kami. Kemungkinan besar stok barang telah habis dibeli pelanggan lain. Silakan periksa kembali keranjang Anda.');
+      alert('Gagal merekam pesanan ke sistem. Pastikan koneksi internet Anda stabil dan coba lagi.');
     } finally {
       setIsLoading(false);
     }
@@ -196,7 +239,6 @@ export default function CartPage() {
               />
             </div>
             
-            {/* RESOLUSI UX: Kolom Catatan Opsional */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Catatan Tambahan <span className="text-gray-400 font-normal">(Opsional)</span></label>
               <input type="text" 
