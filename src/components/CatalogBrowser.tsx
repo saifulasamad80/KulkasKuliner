@@ -42,7 +42,11 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
 
   return (
     <div className="w-full">
+      
+      {/* AREA PINTAR (SEARCH & MENU KAPSUL) */}
       <div className="mb-12 space-y-6">
+        
+        {/* Kolom Pencarian */}
         <div className="relative max-w-xl mx-auto">
           <input 
             type="text" 
@@ -56,19 +60,28 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
           </svg>
         </div>
 
+        {/* Tombol Kapsul (Visual Menu FOMO Upgrade - Avatar Pill) */}
         {!isSearching && (
           <div className="flex overflow-x-auto gap-3 pb-4 custom-scrollbar justify-start md:justify-center px-2 pt-2">
             {categoryMeta.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`flex items-center gap-2 whitespace-nowrap px-6 py-2.5 rounded-full text-sm font-black transition-all duration-300 ${
+                // RESOLUSI UX: Padding asimetris (kiri sempit, kanan lebar) menciptakan bentuk pil modern
+                className={`flex items-center gap-3 whitespace-nowrap pl-1.5 pr-5 py-1.5 rounded-full text-sm font-black transition-all duration-300 ${
                   activeCategory === cat.id 
-                    ? "bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-[0_4px_15px_rgba(37,99,235,0.4)] scale-105 border-transparent" 
-                    : "bg-white text-gray-600 border border-gray-200 hover:border-blue-400 hover:text-blue-600 hover:shadow-md hover:-translate-y-0.5"
+                    ? "bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-[0_4px_15px_rgba(37,99,235,0.4)] scale-105 border border-transparent" 
+                    : "bg-white text-gray-900 border-2 border-gray-100 shadow-[0_4px_10px_rgba(0,0,0,0.06)] hover:border-blue-200 hover:text-blue-700 hover:shadow-md hover:-translate-y-0.5"
                 }`}
               >
-                <span className="text-lg leading-none">{cat.icon}</span>
+                {/* RESOLUSI UX: Membungkus Emoji dengan Lingkaran (Avatar) */}
+                <div className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors shadow-inner ${
+                  activeCategory === cat.id
+                    ? "bg-white/20"
+                    : "bg-blue-50"
+                }`}>
+                  <span className="text-xl leading-none">{cat.icon}</span>
+                </div>
                 <span>{cat.label}</span>
               </button>
             ))}
@@ -76,6 +89,7 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
         )}
       </div>
 
+      {/* AREA ETALASE PRODUK */}
       {isSearching ? (
         searchResults.length === 0 ? (
           <div className="bg-white p-12 text-center rounded-2xl border border-dashed border-gray-300">
@@ -91,7 +105,9 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
           {categories.map(cat => {
              const catProducts = getProductsByCategory(cat);
              if (catProducts.length === 0) return null;
+             
              const meta = categoryMeta.find(c => c.id === cat);
+             
              return (
                <div key={cat} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                   <div className="flex items-center gap-3 mb-6 pb-3 border-b border-gray-100">
@@ -112,6 +128,7 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
           ))}
         </div>
       )}
+
     </div>
   );
 }
