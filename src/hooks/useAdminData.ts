@@ -2,7 +2,19 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export type OrderItem = { id: string; quantity: number; price_at_time: number; products: { name: string; }; };
-export type Order = { id: string; order_number: string; customer_name: string; customer_phone: string; shipping_address: string; total_amount: number; status: string; created_at: string; order_items: OrderItem[]; };
+export type Order = { 
+  id: string; 
+  order_number: string; 
+  customer_name: string; 
+  customer_phone: string; 
+  shipping_address: string; 
+  notes?: string; // INJEKSI: Membaca catatan pembeli
+  total_amount: number; 
+  status: string; 
+  created_at: string; 
+  items?: any[]; // INJEKSI: Membaca kolom JSON Keranjang Belanja yang baru
+  order_items?: OrderItem[]; // Fallback untuk pesanan jadul
+};
 export type Product = { id: string; name: string; stock: number; price: number; image_url: string; is_active: boolean; };
 
 export function useAdminData() {
@@ -15,11 +27,12 @@ export function useAdminData() {
     setIsLoading(true);
     
     // RESOLUSI PRF-02: Batasi pengambilan data order hanya 50 pesanan terbaru (Pagination sederhana)
+    // Tanda bintang (*) akan otomatis menarik kolom 'items' dan 'notes'
     const { data: orderData } = await supabase
       .from('orders')
       .select(`*, order_items (id, quantity, price_at_time, products (name))`)
       .order('created_at', { ascending: false })
-      .limit(50); // Mencegah payload data raksasa
+      .limit(50); 
       
     const { data: prodData } = await supabase
       .from('products')

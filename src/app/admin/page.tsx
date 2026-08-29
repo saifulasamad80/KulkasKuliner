@@ -248,20 +248,50 @@ export default function AdminDashboard() {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
                     {order.customer_phone}
                   </p>
+                  
                   <div className="mt-4 text-xs text-gray-700 bg-white p-3 border border-gray-100 rounded-lg shadow-sm">
                     <span className="block font-black text-[10px] text-gray-400 mb-1">ALAMAT PENGIRIMAN:</span>
                     {order.shipping_address}
                   </div>
+
+                  {/* INJEKSI: Memunculkan Catatan Pembeli */}
+                  {order.notes && order.notes.trim() !== '' && (
+                    <div className="mt-2 text-xs text-yellow-800 bg-yellow-50 p-3 border border-yellow-200 rounded-lg shadow-sm">
+                      <span className="block font-black text-[10px] text-yellow-600 mb-1">CATATAN:</span>
+                      {order.notes}
+                    </div>
+                  )}
                 </div>
                 <div className="p-5 md:w-3/5 flex flex-col justify-between">
                   <div>
                     <ul className="space-y-2 mb-4">
-                      {order.order_items.map((item) => (
-                        <li key={item.id} className="flex justify-between items-start text-sm">
-                          <span className="font-medium text-gray-800 pr-4"><span className="font-bold text-blue-600">{item.quantity}x</span> {item.products?.name}</span>
-                          <span className="font-bold text-gray-900 whitespace-nowrap">Rp {(item.quantity * item.price_at_time).toLocaleString('id-ID')}</span>
-                        </li>
-                      ))}
+                      {/* INJEKSI: Mesin Pembaca JSON (Items) dengan Fallback ke arsitektur lama */}
+                      {order.items && order.items.length > 0 ? (
+                        order.items.map((item: any, idx: number) => (
+                          <li key={idx} className="flex justify-between items-start text-sm border-b border-gray-50 pb-2 last:border-0">
+                            <span className="font-medium text-gray-800 pr-4">
+                              <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded mr-1">{item.quantity}x</span> 
+                              {item.name}
+                            </span>
+                            <span className="font-bold text-gray-900 whitespace-nowrap">
+                              Rp {(item.quantity * item.price).toLocaleString('id-ID')}
+                            </span>
+                          </li>
+                        ))
+                      ) : (
+                        // Fallback jika membaca data pesanan lama
+                        order.order_items?.map((item: any) => (
+                          <li key={item.id} className="flex justify-between items-start text-sm border-b border-gray-50 pb-2 last:border-0">
+                            <span className="font-medium text-gray-800 pr-4">
+                              <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded mr-1">{item.quantity}x</span> 
+                              {item.products?.name}
+                            </span>
+                            <span className="font-bold text-gray-900 whitespace-nowrap">
+                              Rp {(item.quantity * item.price_at_time).toLocaleString('id-ID')}
+                            </span>
+                          </li>
+                        ))
+                      )}
                     </ul>
                     <div className="flex justify-between items-center pt-3 border-t border-dashed border-gray-300">
                       <span className="font-bold text-gray-500 text-sm tracking-wide">TOTAL TAGIHAN</span>
