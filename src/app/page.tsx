@@ -38,11 +38,8 @@ export default async function Home() {
             <span className="text-red-600">Kulkas</span>Kuliner
           </div>
           
-          {/* PERBAIKAN: Tombol Admin sekarang muncul di HP dengan ukuran compact */}
+          {/* PERBAIKAN: Tombol Admin Dihapus. Hanya ada ikon keranjang. */}
           <div className="flex items-center gap-3 md:gap-6">
-            <Link href="/admin" className="text-[10px] md:text-[12px] font-bold text-gray-500 hover:text-red-600 transition-colors bg-gray-50 hover:bg-red-50 px-2.5 py-1.5 md:px-3.5 md:py-1.5 rounded-full border border-gray-200 hover:border-red-200 active:scale-95">
-              Admin
-            </Link>
             <HeaderCart /> 
           </div>
         </div>

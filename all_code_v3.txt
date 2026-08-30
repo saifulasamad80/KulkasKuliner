@@ -1,0 +1,1712 @@
+
+=== FILE: src/store/useCartStore.ts ===
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+export interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  quantity: number;
+}
+
+interface CartState {
+  items: CartItem[];
+  addItem: (product: Omit<CartItem, 'quantity'>) => void;
+  increaseQty: (id: string) => void;
+  decreaseQty: (id: string) => void;
+  removeItem: (id: string) => void;
+  clearCart: () => void;
+  // RESOLUSI INFINITE LOOP: Fungsi ini sekarang resmi menjadi bagian dari Store
+  decreaseItemToMaxStock: (id: string, maxStock: number) => void;
+}
+
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
+      items: [],
+
+      addItem: (product) => {
+        const currentItems = get().items;
+        const existingItem = currentItems.find((item) => item.id === product.id);
+
+        if (existingItem) {
+          if (existingItem.quantity >= product.stock) {
+            alert(`Maksimal pembelian untuk ${product.name} adalah ${product.stock}`);
+            return;
+          }
+          set({
+            items: currentItems.map((item) =>
+              item.id === product.id
+                ? { ...item, quantity: item.quantity + 1 }
+                : item
+            ),
+          });
+        } else {
+          if (product.stock > 0) {
+            set({ items: [...currentItems, { ...product, quantity: 1 }] });
+          }
+        }
+      },
+
+      increaseQty: (id) => {
+        const currentItems = get().items;
+        const targetItem = currentItems.find((item) => item.id === id);
+        
+        if (targetItem && targetItem.quantity < targetItem.stock) {
+          set({
+            items: currentItems.map((item) =>
+              item.id === id ? { ...item, quantity: item.quantity + 1 } : item
+            ),
+          });
+        } else {
+          alert('Batas stok maksimal tercapai.');
+        }
+      },
+
+      decreaseQty: (id) => {
+        const currentItems = get().items;
+        const targetItem = currentItems.find((item) => item.id === id);
+
+        if (targetItem && targetItem.quantity > 1) {
+          set({
+            items: currentItems.map((item) =>
+              item.id === id ? { ...item, quantity: item.quantity - 1 } : item
+            ),
+          });
+        } else {
+          set({ items: currentItems.filter((item) => item.id !== id) });
+        }
+      },
+
+      removeItem: (id) => {
+        set({ items: get().items.filter((item) => item.id !== id) });
+      },
+
+      clearCart: () => set({ items: [] }),
+
+      // Implementasi fungsi penyesuaian stok yang aman dari re-render
+      decreaseItemToMaxStock: (id, maxStock) => {
+        const currentItems = get().items;
+        set({
+          items: currentItems.map((item) => 
+            item.id === id ? { ...item, quantity: maxStock } : item
+          )
+        });
+      }
+    }),
+    {
+      name: 'kulkas-kuliner-cart',
+    }
+  )
+);
+=== FILE: src/hooks/useAdminData.ts ===
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+
+export type OrderItem = { id: string; quantity: number; price_at_time: number; products: { name: string; }; };
+export type Order = { 
+  id: string; 
+  order_number: string; 
+  customer_name: string; 
+  customer_phone: string; 
+  shipping_address: string; 
+  notes?: string; 
+  total_amount: number; 
+  status: string; 
+  created_at: string; 
+  items?: any[]; 
+  order_items?: OrderItem[]; 
+};
+
+// INJEKSI TIPE DATA BARU UNTUK PRODUK
+export type Product = { 
+  id: string; 
+  name: string; 
+  stock: number; 
+  price: number; 
+  image_url: string; 
+  is_active: boolean; 
+  description?: string;
+  rating_avg?: number;
+  rating_count?: number;
+};
+
+export function useAdminData() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [totalRevenue, setTotalRevenue] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    
+    const { data: orderData } = await supabase
+      .from('orders')
+      .select(`*, order_items (id, quantity, price_at_time, products (name))`)
+      .order('created_at', { ascending: false })
+      .limit(50); 
+      
+    const { data: prodData } = await supabase
+      .from('products')
+      .select('*')
+      .order('name', { ascending: true });
+      
+    const { data: revenueData } = await supabase.rpc('get_total_revenue');
+    
+    if (orderData) setOrders(orderData as unknown as Order[]);
+    if (prodData) setProducts(prodData as Product[]);
+    if (revenueData !== null) setTotalRevenue(Number(revenueData));
+    
+    setIsLoading(false);
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    if (!confirm(`Yakin ubah status jadi ${newStatus.toUpperCase()}?`)) return;
+    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
+    if (!error) {
+      fetchData();
+      if (newStatus === 'canceled') alert('Pesanan batal. Stok kembali otomatis.');
+    }
+  };
+
+  const toggleProductActive = async (id: string, currentStatus: boolean) => {
+    const action = currentStatus ? "Arsipkan (Sembunyikan dari Publik)" : "Aktifkan (Tampilkan ke Publik)";
+    if (!confirm(`Yakin ingin ${action} produk ini?`)) return;
+    const { error } = await supabase.from('products').update({ is_active: !currentStatus }).eq('id', id);
+    if (!error) fetchData();
+  };
+
+  return {
+    orders, products, totalRevenue, isLoading,
+    fetchData, updateOrderStatus, toggleProductActive
+  };
+}
+=== FILE: src/app/api/telegram/notify/route.ts ===
+import { NextResponse } from 'next/server';
+
+export async function POST(request: Request) {
+  try {
+    const { order_id, customer_name, total_amount, items_detail } = await request.json();
+    
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_CHAT_ID;
+
+    const message = `🚨 *PESANAN BARU MASUK!* 🚨\n\n*Order ID:* ${order_id}\n*Nama:* ${customer_name}\n*Total:* Rp ${total_amount.toLocaleString('id-ID')}\n\n*Detail Keranjang:*\n${items_detail}\n\n⚠️ *TINDAKAN DIBUTUHKAN:*\nCek WA lu sekarang. Jika bukti transfer valid, klik APPROVE untuk meresmikan pesanan dan potong stok.`;
+
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          { text: "✅ APPROVE (Potong Stok)", callback_data: `APPROVE_${order_id}` },
+          { text: "❌ REJECT (Batalkan)", callback_data: `REJECT_${order_id}` }
+        ]
+      ]
+    };
+
+    const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    
+    const response = await fetch(telegramUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'Markdown',
+        reply_markup: replyMarkup
+      })
+    });
+
+    const data = await response.json();
+    return NextResponse.json({ success: true, data });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+=== FILE: src/app/api/telegram/callback/route.ts ===
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    
+    if (!body.callback_query) {
+      return NextResponse.json({ message: "Abaikan, bukan perintah dari tombol." });
+    }
+
+    const callbackQuery = body.callback_query;
+    const callbackData = callbackQuery.data; // Contoh: "APPROVE_KUL-123"
+    const chatId = callbackQuery.message.chat.id;
+    const messageId = callbackQuery.message.message_id;
+    const callbackId = callbackQuery.id;
+
+    // Memecah perintah dan Order ID
+    const [action, orderId] = callbackData.split('_');
+
+    // 1. Tembak RPC Supabase untuk memproses persetujuan di Database
+    const { data: resultMessage, error } = await supabase.rpc('process_telegram_approval', {
+      p_order_id: orderId,
+      p_action: action
+    });
+
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+
+    // 2. Matikan loading spinner di tombol Telegram
+    await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        callback_query_id: callbackId, 
+        text: resultMessage || 'Sistem error saat memproses',
+        show_alert: true 
+      })
+    });
+
+    // 3. Edit pesan Telegram agar tombolnya musnah (mencegah klik ganda)
+    const originalText = callbackQuery.message.text;
+    const finalMessage = `${originalText}\n\n====================\nSTATUS FINAL: ${resultMessage}`;
+    
+    await fetch(`https://api.telegram.org/bot${botToken}/editMessageText`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text: finalMessage
+      })
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+=== FILE: src/app/layout.tsx ===
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+// INJEKSI WARNA TEMA HP (FOODDASH RED)
+export const viewport: Viewport = {
+  themeColor: '#DC2626',
+};
+
+export const metadata: Metadata = {
+  metadataBase: new URL('https://kulkaskuliner.vercel.app'),
+  title: "KulkasKuliner | Agen Frozen Food Premium Jakarta Timur",
+  description: "Distributor Frozen Food Premium & Praktis. Solusi bekal keluarga dan stok dapur harian Anda. Pesan sekarang, kurir instan langsung jalan!",
+  manifest: "/manifest.json",
+  openGraph: {
+    title: "KulkasKuliner Jakarta Timur",
+    description: "Sedia Pempek, Durian, Bebek Bumbu Hitam, dan aneka Frozen Food premium. Siap antar Instan/Sameday!",
+    url: "https://kulkaskuliner.vercel.app",
+    siteName: "KulkasKuliner",
+    images: [
+      {
+        url: "https://kulkaskuliner.vercel.app/kulkul.jpeg",
+        width: 1200,
+        height: 630,
+        alt: "Katalog KulkasKuliner",
+      },
+    ],
+    locale: "id_ID",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "KulkasKuliner Jakarta Timur",
+    description: "Sedia aneka Frozen Food premium. Siap antar Instan!",
+    images: ["https://kulkaskuliner.vercel.app/kulkul.jpeg"],
+  },
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="id" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased scroll-smooth`}>
+      <body className="min-h-full flex flex-col bg-white">
+        {children}
+        
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').then(
+                    function(registration) {
+                      console.log('PWA ServiceWorker berhasil diregistrasi dengan scope: ', registration.scope);
+                    },
+                    function(err) {
+                      console.log('PWA ServiceWorker gagal diregistrasi: ', err);
+                    }
+                  );
+                });
+              }
+            `,
+          }}
+        />
+      </body>
+    </html>
+  );
+}
+=== FILE: src/app/page.tsx ===
+import { supabase } from '@/lib/supabase';
+import HeaderCart from '@/components/HeaderCart'; 
+import Link from 'next/link';
+import PwaInstallButton from '@/components/PwaInstallButton';
+import CatalogBrowser from '@/components/CatalogBrowser';
+
+export const revalidate = 60;
+
+export default async function Home() {
+  const { data: products, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('is_active', true) 
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error("Gagal menarik data produk:", error);
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-red-50 text-red-600 p-6 rounded-xl border border-red-200 shadow-sm text-center">
+          <h2 className="font-bold text-xl mb-2">Koneksi Database Terputus</h2>
+          <p>Gagal memuat katalog KulkasKuliner. Silakan muat ulang halaman.</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-white relative pb-20">
+      
+      <div className="bg-orange-600 text-white text-[12px] md:text-sm font-bold text-center py-2.5 px-4 shadow-sm relative z-50 tracking-wide">
+        🔥 PROMO HARI INI: Nikmati Harga Spesial & Otomatis Masuk Antrean VIP via Website!
+      </div>
+
+      <header className="bg-white sticky top-0 z-40 border-b border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.03)] backdrop-blur-md bg-white/90">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[65px] flex items-center justify-between">
+          <div className="font-black text-2xl tracking-tight text-gray-900">
+            <span className="text-red-600">Kulkas</span>Kuliner
+          </div>
+          
+          {/* PERBAIKAN: Tombol Admin sekarang muncul di HP dengan ukuran compact */}
+          <div className="flex items-center gap-3 md:gap-6">
+            <Link href="/admin" className="text-[10px] md:text-[12px] font-bold text-gray-500 hover:text-red-600 transition-colors bg-gray-50 hover:bg-red-50 px-2.5 py-1.5 md:px-3.5 md:py-1.5 rounded-full border border-gray-200 hover:border-red-200 active:scale-95">
+              Admin
+            </Link>
+            <HeaderCart /> 
+          </div>
+        </div>
+      </header>
+
+      <section className="bg-white pt-8 pb-12 md:pt-16 md:pb-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+            
+            <div className="text-center md:text-left z-10 order-2 md:order-1">
+               <h1 className="text-4xl md:text-5xl lg:text-[54px] font-black text-gray-900 leading-[1.1] mb-5 tracking-tight">
+                  Stok Kulkas Aman,<br/>
+                  <span className="text-red-600 drop-shadow-sm">Perut Kenyang.</span>
+               </h1>
+               <p className="text-gray-600 text-[15px] md:text-[17px] mb-8 max-w-lg mx-auto md:mx-0 leading-relaxed font-medium">
+                  Distributor Frozen Food Premium Jakarta Timur. Sedia pempek, durian, bebek bumbu hitam, dan aneka lauk praktis keluarga. Pesan sekarang, kurir instan langsung jalan!
+               </p>
+               
+               <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-3 md:gap-4">
+                  <a href="#katalog" className="w-full sm:w-auto bg-red-600 text-white font-bold text-[15px] px-8 py-3.5 rounded-full hover:bg-red-700 transition-all active:scale-[0.96] shadow-[0_4px_14px_0_rgb(220,38,38,0.39)] flex items-center justify-center gap-2">
+                     Pesan Sekarang
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                     </svg>
+                  </a>
+                  <PwaInstallButton />
+               </div>
+            </div>
+            
+            <div className="relative z-10 w-full max-w-[400px] mx-auto md:max-w-none aspect-square md:aspect-[4/3] rounded-[24px] overflow-hidden shadow-2xl border-4 border-white transform md:rotate-2 hover:rotate-0 transition-transform duration-500 order-1 md:order-2">
+               <img src="/kulkul.jpeg" alt="Frozen Food KulkasKuliner" className="w-full h-full object-cover" />
+               <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent pointer-events-none"></div>
+            </div>
+         </div>
+      </section>
+
+      <section id="katalog" className="bg-gray-50 pt-10 pb-16 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mb-6 px-1">
+            <h2 className="text-2xl md:text-[28px] font-black text-gray-900 tracking-tight">Menu Andalan Kami</h2>
+            <p className="text-gray-500 text-sm mt-1 font-medium">Pilih menu favorit keluarga Anda hari ini.</p>
+          </div>
+
+          {(!products || products.length === 0) ? (
+            <div className="bg-white p-12 text-center rounded-[16px] shadow-sm border border-gray-200 mt-6">
+              <p className="text-gray-500 font-medium text-lg">Semua produk sedang habis atau diarsipkan.</p>
+            </div>
+          ) : (
+            <CatalogBrowser products={products} />
+          )}
+        </div>
+      </section>
+      
+    </main>
+  );
+}
+=== FILE: src/app/cart/page.tsx ===
+"use client";
+
+import { useCartStore } from '@/store/useCartStore';
+import { supabase } from '@/lib/supabase';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+
+export default function CartPage() {
+  const { items, increaseQty, decreaseQty, removeItem, clearCart, decreaseItemToMaxStock } = useCartStore();
+
+  const [isClient, setIsClient] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [syncingStock, setSyncingStock] = useState(true);
+  
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    notes: '' 
+  });
+  
+  const [kodePos, setKodePos] = useState('');
+  const [kota, setKota] = useState('');
+  const [kecamatan, setKecamatan] = useState('');
+  const [kelurahan, setKelurahan] = useState('');
+  const [detailJalan, setDetailJalan] = useState('');
+  
+  const [isFetchingZip, setIsFetchingZip] = useState(false);
+  const [zipError, setZipError] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+    
+    const syncCartWithDB = async () => {
+      const currentItems = useCartStore.getState().items;
+      const itemIds = currentItems.map(i => i.id);
+      
+      if(itemIds.length === 0) {
+        setSyncingStock(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, stock, name')
+        .in('id', itemIds);
+
+      if (data && !error) {
+        data.forEach(dbItem => {
+          const cartItem = currentItems.find(ci => ci.id === dbItem.id);
+          
+          if (cartItem) {
+            if (dbItem.stock === 0) {
+               removeItem(cartItem.id);
+               alert(`Maaf, ${dbItem.name} baru saja habis dibeli orang lain dan telah dihapus dari keranjang Anda.`);
+            } else if (cartItem.quantity > dbItem.stock) {
+               decreaseItemToMaxStock(cartItem.id, dbItem.stock);
+               alert(`Stok ${dbItem.name} menurun. Kuantitas pesanan Anda disesuaikan menjadi sisa stok (${dbItem.stock}).`);
+            }
+          }
+        });
+      }
+      setSyncingStock(false);
+    };
+
+    syncCartWithDB();
+  }, []);
+
+  // INJEKSI ALGORITMA: DATABASE SUPABASE (Super Cepat, Tanpa Pihak Ketiga)
+  const handleKodePosChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/\D/g, ''); 
+    setKodePos(val);
+    setZipError(false); 
+
+    if (val.length === 5) {
+      setIsFetchingZip(true);
+      try {
+        // Tembak langsung ke tabel internal Supabase yang udah lu upload
+        const { data, error } = await supabase
+          .from('tbl_kodepos')
+          .select('kelurahan, kecamatan, kabupaten, provinsi')
+          .eq('kodepos', val)
+          .single(); // Ambil 1 baris teratas yang cocok
+
+        if (error || !data) {
+          throw new Error("Kode pos tidak ditemukan di Database Jakarta.");
+        }
+
+        // Mapping hasil SQL ke form input
+        setKota(data.kabupaten || '');
+        setKecamatan(data.kecamatan || '');
+        setKelurahan(data.kelurahan || '');
+        
+      } catch (err) {
+        console.warn("Gagal tarik kode pos dari Supabase:", err);
+        setZipError(true); // Peringatan error merah nyala kalau di luar Jakarta/ga ada di DB
+      } finally {
+        setIsFetchingZip(false);
+      }
+    }
+  };
+
+  if (!isClient) return null;
+
+  const totalAmount = items.reduce((total, item) => total + item.price * item.quantity, 0);
+
+  const validateCheckoutForm = (nama: string, wa: string) => {
+    const nameRegex = /^[a-zA-Z\s']{3,50}$/;
+    if (!nameRegex.test(nama)) {
+      alert("NAMA DITOLAK: Hanya boleh berisi huruf dan spasi.");
+      return null;
+    }
+
+    const cleanWa = wa.replace(/\D/g, ''); 
+    const waRegex = /^(08|628)[0-9]{7,12}$/;
+    if (!waRegex.test(cleanWa)) {
+      alert("NOMOR WA DITOLAK: Harus berupa angka, diawali 08 atau 628, dan panjangnya 9-14 digit.");
+      return null;
+    }
+
+    const formattedWa = cleanWa.startsWith('0') ? '62' + cleanWa.substring(1) : cleanWa;
+    
+    return { cleanName: nama.trim(), cleanWa: formattedWa };
+  };
+
+  const handleCheckout = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const validated = validateCheckoutForm(formData.name, formData.phone);
+    if (!validated) return;
+
+    if (!kodePos || !kota || !kecamatan || !detailJalan) {
+       alert("Mohon lengkapi seluruh kolom alamat pengiriman!");
+       return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const dateObj = new Date();
+      const orderNumber = `KUL-${String(dateObj.getFullYear()).slice(-2)}${String(dateObj.getMonth() + 1).padStart(2, '0')}${String(dateObj.getDate()).padStart(2, '0')}-${String(dateObj.getHours()).padStart(2, '0')}${String(dateObj.getMinutes()).padStart(2, '0')}${String(dateObj.getSeconds()).padStart(2, '0')}`;
+
+      const alamatLengkap = `${detailJalan.trim()}, Kel. ${kelurahan}, Kec. ${kecamatan}, ${kota}, ${kodePos}`;
+
+      const { error: dbError } = await supabase
+        .from('orders')
+        .insert({
+          order_number: orderNumber,
+          order_id: orderNumber,
+          customer_name: validated.cleanName,
+          customer_phone: validated.cleanWa,
+          shipping_address: alamatLengkap,
+          customer_address: alamatLengkap,
+          notes: formData.notes,
+          total_amount: totalAmount,
+          items: items,
+          status: 'unpaid'
+        });
+
+      if (dbError) throw new Error(dbError.message);
+
+      try {
+        await fetch('/api/telegram/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            order_id: orderNumber,
+            customer_name: validated.cleanName,
+            total_amount: totalAmount,
+            items_detail: items.map(item => `- ${item.quantity}x ${item.name}`).join('\n')
+          })
+        });
+      } catch (tgError) {
+        console.error("Gagal mengirim Telegram", tgError);
+      }
+
+      let adminPhone = "628889560447"; 
+      const { data: waData, error: waError } = await supabase
+        .from('store_settings')
+        .select('setting_value')
+        .eq('setting_key', 'admin_wa_number')
+        .single();
+        
+      if (waData && !waError && waData.setting_value) {
+         adminPhone = waData.setting_value; 
+      }
+
+      const orderDetails = items.map(item => `- ${item.quantity}x ${item.name} (Rp ${(item.price * item.quantity).toLocaleString('id-ID')})`).join('\n');
+      const notesSection = formData.notes.trim() !== '' ? `\n\n*Catatan Tambahan:*\n_${formData.notes}_` : '';
+
+      const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya via *JALUR VIP*.\n\n*ORDER ID: ${orderNumber}*\n*Nama:* ${validated.cleanName}\n*No. WA:* ${validated.cleanWa}\n*Alamat Pengiriman:*\n${alamatLengkap}\n\n*Pesanan:*\n${orderDetails}\n\n*Total Belanja:* Rp ${totalAmount.toLocaleString('id-ID')}${notesSection}\n\nMohon infokan ongkos kirim Instan/Sameday beserta total transfer.\n\nTerima kasih.`;
+      
+      const waUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
+
+      clearCart();
+      window.location.href = waUrl;
+
+    } catch (error: any) {
+      console.error("Kesalahan Transaksi Internal:", error.message);
+      alert('Gagal merekam pesanan ke sistem. Pastikan koneksi internet Anda stabil dan coba lagi.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (syncingStock) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <h1 className="text-xl font-bold text-gray-600 animate-pulse">Menyinkronkan stok gudang...</h1>
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <div className="bg-red-50 p-6 rounded-full mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        </div>
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Keranjang Masih Kosong</h1>
+        <Link href="/#katalog" className="bg-red-600 text-white px-8 py-3 rounded-full font-bold hover:bg-red-700 transition-all shadow-md active:scale-95">
+          Kembali ke Katalog
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <main className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-50">
+      <div className="flex items-center justify-between mb-8 border-b border-gray-200 pb-4">
+        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Checkout</h1>
+        <Link href="/#katalog" className="text-red-600 font-semibold hover:underline text-sm">
+          &larr; Tambah Menu Lain
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* KOLOM KIRI: Daftar Pesanan */}
+        <div className="space-y-4">
+          {items.map((item) => (
+            <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">{item.name}</h3>
+                <p className="text-red-600 font-bold mt-1">Rp {item.price.toLocaleString('id-ID')}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => decreaseQty(item.id)} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">-</button>
+                <span className="font-bold w-4 text-center text-gray-900">{item.quantity}</span>
+                <button onClick={() => increaseQty(item.id)} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full font-bold text-gray-600 hover:bg-gray-200">+</button>
+                <button onClick={() => removeItem(item.id)} className="ml-2 text-gray-400 hover:text-red-500 transition-colors p-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+          
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 mt-6">
+            <div className="flex justify-between items-center text-xl">
+              <span className="font-bold text-gray-700">Subtotal</span>
+              <span className="font-black text-red-600">Rp {totalAmount.toLocaleString('id-ID')}</span>
+            </div>
+            <p className="text-sm text-gray-500 mt-2">*Belum termasuk ongkos kirim Instan/Sameday.</p>
+          </div>
+        </div>
+
+        {/* KOLOM KANAN: Form & CTA */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit">
+          <h2 className="text-lg font-bold text-gray-900 mb-5">Detail Pengiriman</h2>
+          <form onSubmit={handleCheckout} className="space-y-4">
+            
+            <div className="bg-red-50 border border-red-200 p-3.5 rounded-lg mb-6 flex items-start gap-3">
+              <span className="text-xl">🚀</span>
+              <p className="text-[13px] text-red-900 font-medium leading-relaxed">
+                <strong className="font-bold block text-red-700">JALUR VIP & PRIORITAS!</strong>
+                Selesaikan order via sistem ini agar pesanan Anda langsung masuk ke layar kasir kami dan diproses tanpa harus antre menunggu balasan chat.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Nama Penerima</label>
+              <input type="text" required 
+                className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all" 
+                value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})}
+                placeholder="Nama Anda"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">No. WhatsApp</label>
+              <input type="tel" required 
+                className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all" 
+                value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                placeholder="08123456789"
+              />
+            </div>
+
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
+               <div>
+                 <label className="block text-sm font-semibold text-gray-700 mb-1">Detail Jalan & Patokan</label>
+                 <textarea required rows={2} 
+                   className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all" 
+                   value={detailJalan} onChange={(e) => setDetailJalan(e.target.value)}
+                   placeholder="Contoh: Jl. Pahlawan No.12, Rumah pagar hitam..."
+                 />
+               </div>
+
+               <div className="relative">
+                 <label className="block text-sm font-semibold text-gray-700 mb-1">Kode Pos <span className="text-red-500 font-normal text-xs">(Ketik untuk Auto-Complete)</span></label>
+                 <input type="text" maxLength={5} required 
+                   className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all font-mono font-bold tracking-widest" 
+                   value={kodePos} onChange={handleKodePosChange}
+                   placeholder="13540"
+                 />
+                 
+                 {isFetchingZip && (
+                   <div className="absolute right-3 top-[34px] flex items-center gap-2">
+                     <span className="text-[10px] font-bold text-gray-400 animate-pulse">MENCARI...</span>
+                     <svg className="animate-spin h-4 w-4 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                   </div>
+                 )}
+                 
+                 {zipError && !isFetchingZip && kodePos.length === 5 && (
+                   <p className="text-[11px] text-red-500 font-bold mt-1.5 flex items-center gap-1">
+                     <span>⚠️</span> Data tidak ditemukan, silakan isi manual ya.
+                   </p>
+                 )}
+               </div>
+
+               <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Kelurahan</label>
+                    <input type="text" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kelurahan} onChange={(e) => setKelurahan(e.target.value)} placeholder="Kelurahan" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Kecamatan</label>
+                    <input type="text" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kecamatan} onChange={(e) => setKecamatan(e.target.value)} placeholder="Kecamatan" />
+                  </div>
+               </div>
+
+               <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Kota/Kabupaten</label>
+                  <input type="text" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kota} onChange={(e) => setKota(e.target.value)} placeholder="Kota/Kabupaten" />
+               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Catatan Tambahan <span className="text-gray-400 font-normal">(Opsional)</span></label>
+              <input type="text" 
+                className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all" 
+                value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                placeholder="Contoh: Tolong pilihkan durian yang manis"
+              />
+            </div>
+
+            <button type="submit" disabled={isLoading} className="w-full bg-red-600 text-white font-bold py-[14px] rounded-full mt-4 hover:bg-red-700 hover:shadow-lg transition-all active:scale-[0.98] flex justify-center items-center gap-2 shadow-sm">
+              {isLoading ? (
+                <span>Memproses VIP...</span>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                  </svg>
+                  Kirim Pesanan (Jalur VIP)
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    </main>
+  );
+}
+=== FILE: src/app/admin/page.tsx ===
+"use client";
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+import { useAdminData } from '@/hooks/useAdminData';
+
+export default function AdminDashboard() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  const { 
+    orders, products, totalRevenue, isLoading, 
+    fetchData, updateOrderStatus, toggleProductActive 
+  } = useAdminData();
+  
+  const [isAdding, setIsAdding] = useState(false);
+  
+  const [newProduct, setNewProduct] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0, rating_count: 0 });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0, rating_count: 0 });
+
+  useEffect(() => {
+    const savedSession = sessionStorage.getItem('kuliner_admin_auth');
+    if (savedSession === "authenticated") {
+      setIsAuthenticated(true);
+    }
+    setIsCheckingAuth(false);
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsVerifying(true);
+    try {
+      const { data, error } = await supabase
+        .from('store_settings')
+        .select('setting_value')
+        .eq('setting_key', 'admin_secret_pin')
+        .single();
+
+      if (error || !data) throw new Error("Gagal terhubung ke server keamanan.");
+
+      if (pinInput === data.setting_value) {
+        sessionStorage.setItem('kuliner_admin_auth', 'authenticated');
+        setIsAuthenticated(true);
+      } else {
+        alert("PIN Akses Ditolak!");
+        setPinInput("");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Kesalahan sistem. Pastikan key 'admin_secret_pin' ada di tabel store_settings.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('kuliner_admin_auth');
+    setIsAuthenticated(false);
+    window.location.href = '/';
+  };
+
+  const handleAddProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProduct.name || newProduct.price <= 0) return alert("Nama dan Harga wajib diisi valid!");
+    const { error } = await supabase.from('products').insert([{ ...newProduct, is_active: true }]);
+    if (error) alert(`Gagal: ${error.message}`);
+    else { 
+      alert("Produk ditambah!"); 
+      setIsAdding(false); 
+      setNewProduct({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0, rating_count: 0 }); 
+      fetchData(); 
+    }
+  };
+
+  const saveEditProduct = async (id: string) => {
+    const { error } = await supabase.from('products').update(editForm).eq('id', id);
+    if (error) alert(`Gagal update: ${error.message}`);
+    else { setEditingId(null); fetchData(); }
+  };
+
+  if (isCheckingAuth) return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-white">Verifikasi Keamanan...</p></div>;
+
+  if (!isAuthenticated) {
+    return (
+      <main className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full border-t-8 border-red-600">
+          <h1 className="text-2xl font-black text-gray-900 mb-2 text-center">Area Terlarang</h1>
+          <p className="text-sm text-gray-500 mb-6 text-center">Masukkan PIN Operasional untuk mengakses Dashboard KulkasKuliner.</p>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input 
+              type="password" 
+              placeholder="Masukkan PIN" 
+              required
+              disabled={isVerifying}
+              className="w-full text-center tracking-[1em] font-black text-2xl p-4 border-2 border-gray-300 rounded-xl focus:border-red-600 focus:ring-0 outline-none disabled:bg-gray-100 disabled:opacity-50"
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value)}
+            />
+            <button 
+              type="submit" 
+              disabled={isVerifying}
+              className="w-full bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition-colors shadow-lg disabled:bg-red-400 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              {isVerifying ? (
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              ) : "Akses Sistem"}
+            </button>
+          </form>
+          <div className="mt-6 text-center">
+            <Link href="/" className="text-sm text-blue-600 font-semibold hover:underline">← Kembali ke Halaman Publik</Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-xl text-gray-500">Memuat Data Dashboard...</div>;
+
+  return (
+    <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-50">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-gray-300 pb-4 gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold text-gray-900 flex items-center gap-2">
+            Dashboard Admin 
+            <span className="bg-red-100 text-red-600 text-[10px] uppercase px-2 py-0.5 rounded-full border border-red-200">Secured</span>
+          </h1>
+          <p className="text-gray-500 mt-1">Sistem Manajemen KulkasKuliner</p>
+        </div>
+        <div className="flex items-center flex-wrap gap-4 w-full md:w-auto">
+          <div className="bg-green-100 border border-green-300 px-5 py-2 rounded-lg flex-1 md:flex-none text-right shadow-sm">
+            <span className="block text-xs font-bold text-green-700 uppercase tracking-wider mb-0.5">Total Pendapatan</span>
+            <span className="block text-xl font-black text-green-800">Rp {totalRevenue.toLocaleString('id-ID')}</span>
+          </div>
+          <button onClick={handleLogout} className="bg-red-100 text-red-700 border border-red-300 px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-red-200 transition-colors shadow-sm text-center">Kunci Keluar</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* KOLOM KIRI: INVENTORI */}
+        <div className="lg:col-span-5 bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit">
+          <div className="flex justify-between items-center mb-5 border-b pb-2">
+            <h2 className="text-xl font-bold text-gray-800">Manajemen Inventori</h2>
+            <button onClick={() => setIsAdding(!isAdding)} className="bg-green-600 text-white px-3 py-1 text-sm font-bold rounded hover:bg-green-700 transition-colors shadow-sm">
+              {isAdding ? "Batal" : "+ Tambah Produk"}
+            </button>
+          </div>
+
+          {/* FORM TAMBAH PRODUK */}
+          {isAdding && (
+            <form onSubmit={handleAddProduct} className="mb-6 bg-green-50 p-4 border border-green-200 rounded-lg space-y-3 shadow-inner">
+              <input type="text" placeholder="Nama Produk" required 
+                className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} 
+              />
+              <textarea placeholder="Deskripsi Produk (Maksimal terlihat 2 baris)" rows={2}
+                className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} 
+              />
+              <div className="flex gap-2">
+                <input type="number" placeholder="Harga (Rp)" required min="1"
+                  className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                  value={newProduct.price || ''} onChange={e => setNewProduct({...newProduct, price: parseInt(e.target.value)})} 
+                />
+                <input type="number" placeholder="Stok Gudang" required min="0"
+                  className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                  value={newProduct.stock || ''} onChange={e => setNewProduct({...newProduct, stock: parseInt(e.target.value)})} 
+                />
+              </div>
+              <div className="flex gap-2">
+                <input type="number" placeholder="Total Terjual (Manual)"
+                  className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                  value={newProduct.rating_avg || ''} onChange={e => setNewProduct({...newProduct, rating_avg: parseInt(e.target.value)})} 
+                />
+                <input type="number" placeholder="Total Favorit (Manual)"
+                  className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                  value={newProduct.rating_count || ''} onChange={e => setNewProduct({...newProduct, rating_count: parseInt(e.target.value)})} 
+                />
+              </div>
+              <input type="url" placeholder="URL Foto Absolut (Raw GitHub)" 
+                className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
+                value={newProduct.image_url} onChange={e => setNewProduct({...newProduct, image_url: e.target.value})} 
+              />
+              <button type="submit" className="w-full bg-green-600 text-white font-bold py-2.5 rounded-lg text-sm hover:bg-green-700 transition-colors shadow-sm">Simpan Produk Baru</button>
+            </form>
+          )}
+
+          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+            {products.map((prod) => (
+              <div key={prod.id} className={`p-4 border rounded-xl flex flex-col gap-3 transition-colors ${!prod.is_active ? 'bg-gray-100 opacity-70' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
+                
+                {/* FORM EDIT PRODUK */}
+                {editingId === prod.id ? (
+                  <div className="space-y-2 bg-blue-50/50 p-2 -mx-2 rounded-lg border border-blue-100">
+                    <input type="text" placeholder="Nama Produk"
+                      className="w-full p-2 border border-gray-300 rounded text-sm font-bold bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} 
+                    />
+                    <textarea placeholder="Deskripsi" rows={2}
+                      className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} 
+                    />
+                    <div className="flex gap-2">
+                      <input type="number" placeholder="Harga"
+                        className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={editForm.price} onChange={e => setEditForm({...editForm, price: parseInt(e.target.value)})} 
+                      />
+                      <input type="number" placeholder="Stok"
+                        className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={editForm.stock} onChange={e => setEditForm({...editForm, stock: parseInt(e.target.value)})} 
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <input type="number" placeholder="Total Terjual"
+                        className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={editForm.rating_avg || ''} onChange={e => setEditForm({...editForm, rating_avg: parseInt(e.target.value)})} 
+                      />
+                      <input type="number" placeholder="Total Favorit"
+                        className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={editForm.rating_count || ''} onChange={e => setEditForm({...editForm, rating_count: parseInt(e.target.value)})} 
+                      />
+                    </div>
+                    <input type="text" placeholder="URL Foto Absolut" 
+                      className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={editForm.image_url} onChange={e => setEditForm({...editForm, image_url: e.target.value})} 
+                    />
+                    <div className="flex gap-2 mt-3">
+                      <button onClick={() => saveEditProduct(prod.id)} className="bg-blue-600 text-white px-3 py-2 text-xs font-bold rounded-lg flex-1 hover:bg-blue-700 transition-colors shadow-sm">Simpan Perubahan</button>
+                      <button onClick={() => setEditingId(null)} className="bg-gray-200 text-gray-800 px-3 py-2 text-xs font-bold rounded-lg flex-1 hover:bg-gray-300 transition-colors">Batal</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* TAMPILAN ITEM DI ADMIN */}
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                        <img src={prod.image_url} alt={prod.name} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-sm text-gray-900 leading-tight truncate">{prod.name}</h3>
+                        <div className="flex items-center flex-wrap gap-2 mt-1.5">
+                          <span className="text-xs font-bold text-blue-700">Rp {prod.price.toLocaleString('id-ID')}</span>
+                          
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${prod.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            SISA: {prod.stock}
+                          </span>
+                          
+                          {/* INJEKSI METRIK TERJUAL DI SINI */}
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                            🛒 {prod.rating_avg ? Math.floor(Number(prod.rating_avg)) : 0} Terjual
+                          </span>
+
+                          {!prod.is_active && <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-gray-800 text-white">DIARSIPKAN</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-3 pt-3 mt-1 border-t border-gray-100">
+                      <button 
+                        onClick={() => { 
+                          setEditingId(prod.id); 
+                          setEditForm({ 
+                            name: prod.name, 
+                            price: prod.price, 
+                            stock: prod.stock, 
+                            image_url: prod.image_url,
+                            description: prod.description || '',
+                            rating_avg: prod.rating_avg || 0,
+                            rating_count: prod.rating_count || 0
+                          }); 
+                        }} 
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                      >
+                        Edit Item
+                      </button>
+                      <span className="text-gray-300">|</span>
+                      <button onClick={() => toggleProductActive(prod.id, prod.is_active)} className={`text-xs font-bold transition-colors ${prod.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-600 hover:text-green-800'}`}>
+                        {prod.is_active ? 'Sembunyikan' : 'Tampilkan Publik'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* KOLOM KANAN: PESANAN */}
+        <div className="lg:col-span-7 space-y-5">
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Antrean Pesanan Masuk</h2>
+          {orders.length === 0 ? (
+             <div className="bg-white p-12 text-center rounded-xl shadow-sm border border-gray-200">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                <p className="text-gray-500 font-medium">Belum ada pesanan masuk hari ini.</p>
+             </div>
+          ) : (
+            orders.map((order) => (
+               <div key={order.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col md:flex-row transition-all hover:shadow-md">
+                <div className="p-5 md:w-2/5 border-b md:border-b-0 md:border-r border-gray-200 bg-gray-50/50">
+                  <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2.5 py-1 rounded block w-fit mb-3 tracking-wider">{order.order_number}</span>
+                  <h2 className="text-base font-bold text-gray-900 leading-tight">{order.customer_name}</h2>
+                  <p className="text-sm font-semibold text-gray-600 mt-1 flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" /></svg>
+                    {order.customer_phone}
+                  </p>
+                  
+                  <div className="mt-4 text-xs text-gray-700 bg-white p-3 border border-gray-100 rounded-lg shadow-sm">
+                    <span className="block font-black text-[10px] text-gray-400 mb-1">ALAMAT PENGIRIMAN:</span>
+                    {order.shipping_address}
+                  </div>
+
+                  {order.notes && order.notes.trim() !== '' && (
+                    <div className="mt-2 text-xs text-yellow-800 bg-yellow-50 p-3 border border-yellow-200 rounded-lg shadow-sm">
+                      <span className="block font-black text-[10px] text-yellow-600 mb-1">CATATAN:</span>
+                      {order.notes}
+                    </div>
+                  )}
+                </div>
+                <div className="p-5 md:w-3/5 flex flex-col justify-between">
+                  <div>
+                    <ul className="space-y-2 mb-4">
+                      {order.items && order.items.length > 0 ? (
+                        order.items.map((item: any, idx: number) => (
+                          <li key={idx} className="flex justify-between items-start text-sm border-b border-gray-50 pb-2 last:border-0">
+                            <span className="font-medium text-gray-800 pr-4">
+                              <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded mr-1">{item.quantity}x</span> 
+                              {item.name}
+                            </span>
+                            <span className="font-bold text-gray-900 whitespace-nowrap">
+                              Rp {(item.quantity * item.price).toLocaleString('id-ID')}
+                            </span>
+                          </li>
+                        ))
+                      ) : (
+                        order.order_items?.map((item: any) => (
+                          <li key={item.id} className="flex justify-between items-start text-sm border-b border-gray-50 pb-2 last:border-0">
+                            <span className="font-medium text-gray-800 pr-4">
+                              <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded mr-1">{item.quantity}x</span> 
+                              {item.products?.name}
+                            </span>
+                            <span className="font-bold text-gray-900 whitespace-nowrap">
+                              Rp {(item.quantity * item.price_at_time).toLocaleString('id-ID')}
+                            </span>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                    <div className="flex justify-between items-center pt-3 border-t border-dashed border-gray-300">
+                      <span className="font-bold text-gray-500 text-sm tracking-wide">TOTAL TAGIHAN</span>
+                      <span className="text-lg font-black text-blue-700">Rp {order.total_amount.toLocaleString('id-ID')}</span>
+                    </div>
+                  </div>
+                  <div className="mt-5 bg-gray-50/80 p-3 rounded-lg border border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                    <span className={`px-2.5 py-1.5 rounded text-[10px] font-black uppercase tracking-wider shadow-sm ${ order.status === 'unpaid' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : order.status === 'canceled' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-green-100 text-green-800 border border-green-200' }`}>
+                      {order.status}
+                    </span>
+                    <div className="flex gap-2">
+                      {order.status === 'unpaid' && ( <button onClick={() => updateOrderStatus(order.id, 'paid')} className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm focus:ring-2 focus:ring-blue-400 outline-none">Set Lunas</button> )}
+                      {order.status !== 'canceled' && order.status !== 'completed' && ( <button onClick={() => updateOrderStatus(order.id, 'canceled')} className="bg-white text-red-600 border border-red-200 px-4 py-1.5 rounded text-xs font-bold hover:bg-red-50 transition-colors shadow-sm focus:ring-2 focus:ring-red-400 outline-none">Batalkan</button> )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
+=== FILE: src/components/ProductCard.tsx ===
+"use client";
+
+import { useCartStore } from '@/store/useCartStore';
+
+export default function ProductCard({ product }: { product: any }) {
+  const { addItem, items } = useCartStore();
+
+  const cartItem = items.find(item => item.id === product.id);
+  const currentCartQty = cartItem ? cartItem.quantity : 0;
+  
+  const isOutOfStock = product.stock <= 0 || currentCartQty >= product.stock;
+
+  const handleAdd = () => {
+    if (isOutOfStock) return;
+    addItem({ ...product, quantity: 1 });
+  };
+
+  const fakeOriginalPrice = product.price * 1.2;
+
+  // LOGIKA DINAMIS: Cukup baca 1 kolom (rating_avg sebagai Total Terjual)
+  const totalTerjual = product.rating_avg ? Math.floor(Number(product.rating_avg)) : 0;
+  
+  // Jika terjual lebih dari 10, otomatis naik kasta jadi menu Favorit
+  const isFavorit = totalTerjual >= 10; 
+  
+  const realDescription = product.description || "Deskripsi belum tersedia.";
+
+  return (
+    <div className="bg-white rounded-[12px] shadow-sm hover:shadow-md border border-gray-100 overflow-hidden flex flex-col h-full transition-all duration-200 relative group">
+      
+      {/* AREA FOTO */}
+      <div className="aspect-[4/3] w-full bg-gray-50 overflow-hidden relative">
+        <img 
+          src={product.image_url} 
+          alt={product.name} 
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+        
+        {/* BADGE SCARCITY (Muncul jika stok menipis) */}
+        {(product.stock > 0 && product.stock <= 4) && (
+          <div className="absolute top-2 left-2 bg-orange-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1 animate-pulse z-10">
+            <span>🔥</span> SISA {product.stock}!
+          </div>
+        )}
+
+        {/* BADGE POPULER OTOMATIS (Tanpa hardcode lagi) */}
+        {isFavorit && (
+          <div className="absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1 z-10">
+            <span>⭐</span> POPULER
+          </div>
+        )}
+      </div>
+
+      {/* AREA DESKRIPSI */}
+      <div className="p-[16px] flex flex-col flex-1 bg-white">
+        
+        <div className="flex justify-between items-start mb-0.5 gap-2">
+          <h3 className="font-semibold text-gray-900 text-[15px] leading-[20px] line-clamp-2">{product.name}</h3>
+          
+          <div className="flex flex-col items-end shrink-0">
+            {/* Hanya Tampilkan Angka Terjual */}
+            <div className="flex items-center gap-1 text-[12px] font-bold text-gray-700">
+              <span className="text-orange-500 text-[14px]">🛒</span> {totalTerjual} Terjual
+            </div>
+            {/* Label Favorit tanpa angka */}
+            {isFavorit && (
+              <div className="flex items-center gap-1 text-[11px] text-red-500 font-bold mt-0.5 bg-red-50 px-1.5 py-0.5 rounded">
+                ❤️ Favorit
+              </div>
+            )}
+          </div>
+        </div>
+
+        <p className="text-[12px] text-gray-500 mb-3 line-clamp-2 font-medium leading-relaxed mt-2">
+          {realDescription}
+        </p>
+        
+        <div className="flex items-center gap-2 mb-3 mt-auto">
+          <p className="text-[16px] font-bold text-gray-900">Rp {product.price.toLocaleString('id-ID')}</p>
+          <p className="text-[12px] font-medium text-gray-400 line-through">Rp {fakeOriginalPrice.toLocaleString('id-ID')}</p>
+        </div>
+
+        <div className="mb-3">
+          {product.stock <= 0 ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-red-50 text-red-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+              Habis Terjual
+            </span>
+          ) : (
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${
+              product.stock <= 5 
+                ? 'bg-orange-50 text-orange-700' 
+                : 'bg-green-50 text-green-700'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${product.stock <= 5 ? 'bg-orange-500 animate-pulse' : 'bg-green-500'}`}></span>
+              Sisa {product.stock} di Kulkas
+            </span>
+          )}
+        </div>
+
+        <button
+          onClick={handleAdd}
+          disabled={isOutOfStock}
+          className={`w-full font-semibold py-[10px] rounded-full text-[14px] transition-all active:scale-[0.97] shadow-sm flex items-center justify-center gap-2 ${
+            isOutOfStock 
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-60" 
+              : "bg-red-600 text-white hover:bg-red-700 hover:shadow-md"
+          }`}
+        >
+          {isOutOfStock ? "Stok Habis" : "Order Now"}
+        </button>
+      </div>
+    </div>
+  );
+}
+=== FILE: src/components/CatalogBrowser.tsx ===
+"use client";
+
+import { useState, useEffect } from 'react';
+import ProductCard from './ProductCard';
+import { supabase } from '@/lib/supabase';
+
+export default function CatalogBrowser({ products }: { products: any[] }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState("Semua");
+  
+  const [liveProducts, setLiveProducts] = useState(products);
+
+  useEffect(() => {
+    setLiveProducts(products);
+
+    const fetchFreshestData = async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+      
+      if (data && !error) {
+        setLiveProducts(data); 
+      }
+    };
+    fetchFreshestData();
+
+    const channel = supabase
+      .channel('public:products')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' }, 
+        (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            setLiveProducts((current) => 
+              current.map((p) => (p.id === payload.new.id ? { ...p, ...payload.new } : p))
+            );
+          } else if (payload.eventType === 'INSERT') {
+            setLiveProducts((current) => [...current, payload.new]);
+          } else if (payload.eventType === 'DELETE') {
+            setLiveProducts((current) => current.filter((p) => p.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [products]);
+
+  const categoryMeta = [
+    { id: "Semua", label: "All" }, // Diubah jadi 'All' biar makin persis referensi
+    { id: "Pasta", label: "Pasta" },
+    { id: "Kebab", label: "Kebab" },
+    { id: "Durian", label: "Durian" },
+    { id: "Pempek", label: "Pempek" },
+    { id: "Lauk & Cemilan", label: "Lauk & Cemilan" }
+  ];
+
+  const categories = categoryMeta.filter(c => c.id !== "Semua").map(c => c.id);
+
+  // LOGIKA ALGORITMA: Mengurutkan produk berdasarkan metrik Terjual tertinggi (maksimal 4 produk)
+  const popularProducts = [...liveProducts]
+    .sort((a, b) => (Number(b.rating_avg) || 0) - (Number(a.rating_avg) || 0))
+    .slice(0, 4);
+
+  const getProductsByCategory = (cat: string) => {
+    return liveProducts.filter((p) => {
+      const nameLower = p.name.toLowerCase();
+      if (cat === "Pasta") return nameLower.includes("pasta");
+      if (cat === "Kebab") return nameLower.includes("kebab");
+      if (cat === "Durian") return nameLower.includes("durian");
+      if (cat === "Pempek") return nameLower.includes("pempek");
+      if (cat === "Lauk & Cemilan") {
+        return !nameLower.includes("pasta") && 
+               !nameLower.includes("kebab") && 
+               !nameLower.includes("durian") && 
+               !nameLower.includes("pempek");
+      }
+      return true; 
+    });
+  };
+
+  const isSearching = searchQuery.trim() !== "";
+  const searchResults = isSearching 
+    ? liveProducts.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : [];
+
+  return (
+    <div className="w-full">
+      
+      {/* AREA SEARCH & KAPSUL FILTER */}
+      <div className="mb-8 space-y-4">
+        
+        <div className="relative max-w-xl mx-auto">
+          <input 
+            type="text" 
+            placeholder="Search for frozen food or meals..." 
+            className="w-full pl-11 pr-4 py-[10px] bg-white border-none rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.08)] focus:ring-2 focus:ring-red-600 outline-none text-gray-700 text-[14px] transition-all"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 absolute left-4 top-[11px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+
+        {/* TOMBOL KAPSUL GAYA FOODDASH (Abu-abu Balon / bg-gray-100) */}
+        {!isSearching && (
+          <div className="flex overflow-x-auto gap-2 pb-2 custom-scrollbar justify-start md:justify-center px-1">
+            {categoryMeta.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`whitespace-nowrap px-4 py-2.5 rounded-full text-[13px] font-semibold transition-all ${
+                  activeCategory === cat.id 
+                    ? "bg-red-600 text-white shadow-sm" 
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-transparent"
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* AREA ETALASE PRODUK */}
+      {isSearching ? (
+        searchResults.length === 0 ? (
+          <div className="bg-white p-12 text-center rounded-xl border border-gray-100">
+             <p className="text-gray-500 font-medium">Menu tidak ditemukan.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            {searchResults.map((p) => <ProductCard key={p.id} product={p} />)}
+          </div>
+        )
+      ) : activeCategory === "Semua" ? (
+        <div className="space-y-10">
+          
+          {/* INJEKSI: RAK MENU TERPOPULER DI POSISI PALING ATAS */}
+          {popularProducts.length > 0 && (
+            <div className="pt-2">
+              <h3 className="text-[18px] font-bold text-gray-900 mb-4 px-1 flex items-center gap-2">
+                Popular Menu 
+                <span className="text-red-500 text-[14px]">🔥</span>
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                {popularProducts.map(p => <ProductCard key={p.id} product={p} />)}
+              </div>
+            </div>
+          )}
+
+          {/* RAK KATEGORI LAINNYA DI BAWAHNYA */}
+          {categories.map(cat => {
+             const catProducts = getProductsByCategory(cat);
+             if (catProducts.length === 0) return null;
+             
+             return (
+               <div key={cat} className="pt-4 border-t border-gray-100">
+                  <h3 className="text-[18px] font-bold text-gray-900 mb-4 px-1">{cat}</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                    {catProducts.map(p => <ProductCard key={p.id} product={p} />)}
+                  </div>
+               </div>
+             )
+          })}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+          {getProductsByCategory(activeCategory).map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      )}
+
+    </div>
+  );
+}
+=== FILE: src/components/PwaInstallButton.tsx ===
+"use client";
+
+import { useEffect, useState, useRef } from "react";
+
+export default function PwaInstallButton() {
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [isIosPrompt, setIsIosPrompt] = useState(false);
+  const [showFallback, setShowFallback] = useState(false);
+  
+  const deferredPromptRef = useRef<any>(null);
+
+  useEffect(() => {
+    // 1. Cek apakah Aplikasi sudah terinstal di HP
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+    window.addEventListener('appinstalled', () => {
+      setIsInstalled(true);
+    });
+
+    // 2. RADAR ANDROID/CHROME
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault(); 
+      deferredPromptRef.current = e; 
+      setIsIosPrompt(false);
+    };
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    // 3. RADAR iOS / SAFARI
+    const isIos = () => {
+      const userAgent = window.navigator.userAgent.toLowerCase();
+      return /iphone|ipad|ipod/.test(userAgent);
+    };
+    const isInStandaloneMode = () => {
+      return ('standalone' in window.navigator) && (window.navigator as any).standalone;
+    };
+    if (isIos() && !isInStandaloneMode()) {
+      setIsIosPrompt(true);
+    }
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    const promptEvent = deferredPromptRef.current;
+    
+    // JIKA CHROME LEMOT / BELUM SIAP (Taktik Fallback)
+    if (!promptEvent) {
+      setShowFallback(true);
+      setTimeout(() => setShowFallback(false), 8000); 
+      return;
+    }
+
+    // JIKA CHROME SUDAH SIAP
+    promptEvent.prompt();
+    try {
+      const { outcome } = await promptEvent.userChoice;
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+      }
+    } catch (error) {
+      console.error('Gagal instalasi:', error);
+    } finally {
+      deferredPromptRef.current = null;
+    }
+  };
+
+  // Jika aplikasi sudah di dalam HP, musnahkan tombolnya
+  if (isInstalled) return null;
+
+  return (
+    <div className="w-full sm:w-auto relative flex flex-col items-center">
+      {/* UI UNTUK ANDROID / CHROME (DIPERBARUI KE GAYA FOODDASH SECONDARY) */}
+      {!isIosPrompt && (
+        <button 
+          onClick={handleInstallClick}
+          className="flex items-center justify-center gap-2 w-full sm:w-auto bg-white text-red-600 border-2 border-red-100 px-8 py-3.5 rounded-full font-bold hover:bg-red-50 hover:border-red-200 transition-all shadow-sm active:scale-[0.96]"
+        >
+          {/* Ikon diubah warnanya mengikuti teks (currentColor) */}
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 currentColor" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+          Instal Aplikasi
+        </button>
+      )}
+
+      {/* NOTIFIKASI FALLBACK CHROME (Kosmetik disesuaikan dengan tema terang) */}
+      {showFallback && !isIosPrompt && (
+        <div className="absolute top-16 w-64 bg-white text-gray-800 p-3 rounded-xl shadow-2xl border border-red-200 text-xs text-center animate-bounce z-50">
+          <p className="font-bold text-red-600 mb-1">Sedang memproses...</p>
+          <p>Jika popup tidak muncul, instal manual dengan klik ikon <strong className="bg-gray-100 border border-gray-200 px-1 py-0.5 rounded">Titik Tiga (⋮)</strong> di pojok kanan atas browser, lalu pilih <strong className="text-red-600">Tambahkan ke Layar Utama</strong>.</p>
+        </div>
+      )}
+
+      {/* UI UNTUK iOS / SAFARI (DIPERBARUI KE TEMA MERAH TIPIS) */}
+      {isIosPrompt && (
+        <div className="bg-red-50 border border-red-100 p-3 rounded-xl w-full sm:w-auto text-center text-red-900 shadow-sm">
+          <p className="text-xs leading-relaxed font-medium">
+            <span className="font-bold text-red-600">Pengguna iPhone:</span><br/>
+            Tekan <strong className="inline-flex items-center gap-1 bg-white px-1.5 py-0.5 rounded border border-red-200 mx-1 shadow-sm">Share</strong> di bawah,<br/>
+            lalu pilih <strong>➕ Add to Home Screen</strong>.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+=== FILE: src/components/FloatingCart.tsx ===
+"use client";
+
+import { useCartStore } from '@/store/useCartStore';
+import { useEffect, useState } from 'react';
+import Link from 'next/link'; 
+
+export default function FloatingCart() {
+  const [isClient, setIsClient] = useState(false);
+  const items = useCartStore((state) => state.items);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) return null;
+
+  const totalItems = items.reduce((total, item) => total + item.quantity, 0);
+
+  if (totalItems === 0) return null; 
+
+  return (
+    <Link href="/cart" className="fixed bottom-6 right-6 bg-red-600 text-white p-4 rounded-full shadow-2xl hover:bg-red-700 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 group z-50 ring-4 ring-red-600/20">
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+      <span className="font-bold text-lg bg-white text-red-700 px-2.5 py-0.5 rounded-full shadow-inner">
+        {totalItems}
+      </span>
+    </Link>
+  );
+}
+=== FILE: src/components/HeaderCart.tsx ===
+"use client";
+
+import { useCartStore } from '@/store/useCartStore';
+import { useEffect, useState } from 'react';
+import Link from 'next/link'; 
+
+export default function HeaderCart() {
+  const [isClient, setIsClient] = useState(false);
+  const items = useCartStore((state) => state.items);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) return null;
+
+  const totalItems = items.reduce((total, item) => total + item.quantity, 0);
+
+  return (
+    <Link href="/cart" className="relative p-2 text-gray-700 hover:text-red-600 transition-colors group flex items-center">
+      {/* Ikon Keranjang Belanja */}
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+      
+      {/* Badge Notifikasi Angka (Hanya muncul jika ada barang) */}
+      {totalItems > 0 && (
+        <span className="absolute top-0 right-0 bg-red-600 text-white text-[11px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white group-hover:scale-110 transition-transform shadow-sm">
+          {totalItems}
+        </span>
+      )}
+    </Link>
+  );
+}
+=== FILE: src/lib/supabase.ts ===
+import { createClient } from '@supabase/supabase-js';
+
+// Ekstraksi Environment Variables
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+// Validasi Brutal: Hentikan aplikasi jika kredensial hilang (Mencegah Silent Error)
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    "FATAL ERROR: NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY wajib diisi di .env.local"
+  );
+}
+
+// Inisiasi Client
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
