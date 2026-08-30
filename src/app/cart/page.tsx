@@ -25,6 +25,9 @@ export default function CartPage() {
   const [detailJalan, setDetailJalan] = useState('');
   
   const [isFetchingZip, setIsFetchingZip] = useState(false);
+  
+  // STATE BARU: Untuk ngasih tau user kalau API-nya mati
+  const [zipError, setZipError] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -64,23 +67,23 @@ export default function CartPage() {
     syncCartWithDB();
   }, []);
 
-  // MESIN ANTI-JEBOL: Multi-API Redundancy
   const handleKodePosChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/\D/g, ''); 
     setKodePos(val);
+    setZipError(false); // Reset peringatan tiap ngetik ulang
 
     if (val.length === 5) {
       setIsFetchingZip(true);
       try {
-        // PERCOBAAN 1: API CariKodePos
-        const res1 = await fetch(`https://carikodepos.id/api/postal-codes?q=${val}&limit=1`);
+        // PERCOBAAN 1: Balikin ke kodepos.vercel.app (paling relevan utk ID)
+        const res1 = await fetch(`https://kodepos.vercel.app/search?q=${val}`);
         if (res1.ok) {
           const result1 = await res1.json();
-          if (result1 && result1.success && result1.data?.postalCodes?.length > 0) {
-            const match = result1.data.postalCodes[0];
-            setKota(match.city?.name || '');
-            setKecamatan(match.district?.name || '');
-            setKelurahan(match.village?.name || '');
+          if (result1 && result1.data && result1.data.length > 0) {
+            const match = result1.data[0];
+            setKota(match.city || '');
+            setKecamatan(match.subdistrict || '');
+            setKelurahan(match.urban || '');
             setIsFetchingZip(false);
             return;
           }
@@ -94,7 +97,6 @@ export default function CartPage() {
             const match = result2.places[0];
             setKota(match.state || ''); 
             setKelurahan(match['place name'] || '');
-            // Catatan: Zippopotamus tidak selalu punya data kecamatan lengkap
             setIsFetchingZip(false);
             return;
           }
@@ -103,8 +105,8 @@ export default function CartPage() {
         throw new Error("Semua API Publik sedang down");
 
       } catch (err) {
-        // FALLBACK DARURAT: Tetap kalem, user tinggal ketik manual
         console.warn("API Kode Pos Gagal, beralih ke mode manual:", err);
+        setZipError(true); // Menyalakan tulisan peringatan merah
       } finally {
         setIsFetchingZip(false);
       }
@@ -308,7 +310,7 @@ export default function CartPage() {
               />
             </div>
 
-            {/* BLOK AUTO-FILL ALAMAT PINTAR (SUDAH DIURUTKAN) */}
+            {/* BLOK AUTO-FILL ALAMAT PINTAR */}
             <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
                <div>
                  <label className="block text-sm font-semibold text-gray-700 mb-1">Detail Jalan & Patokan</label>
@@ -326,11 +328,20 @@ export default function CartPage() {
                    value={kodePos} onChange={handleKodePosChange}
                    placeholder="13540"
                  />
+                 
+                 {/* ANIMASI LOADING */}
                  {isFetchingZip && (
                    <div className="absolute right-3 top-[34px] flex items-center gap-2">
                      <span className="text-[10px] font-bold text-gray-400 animate-pulse">MENCARI...</span>
                      <svg className="animate-spin h-4 w-4 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                    </div>
+                 )}
+                 
+                 {/* INDIKATOR ERROR JIKA SEMUA API MATI */}
+                 {zipError && !isFetchingZip && kodePos.length === 5 && (
+                   <p className="text-[11px] text-red-500 font-bold mt-1.5 flex items-center gap-1">
+                     <span>⚠️</span> Gagal menarik data otomatis. Silakan isi manual ya.
+                   </p>
                  )}
                </div>
 
