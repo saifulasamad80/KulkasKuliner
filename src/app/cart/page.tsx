@@ -25,8 +25,6 @@ export default function CartPage() {
   const [detailJalan, setDetailJalan] = useState('');
   
   const [isFetchingZip, setIsFetchingZip] = useState(false);
-  
-  // STATE BARU: Untuk ngasih tau user kalau API-nya mati
   const [zipError, setZipError] = useState(false);
 
   useEffect(() => {
@@ -67,46 +65,34 @@ export default function CartPage() {
     syncCartWithDB();
   }, []);
 
+  // INJEKSI ALGORITMA: DATABASE SUPABASE (Super Cepat, Tanpa Pihak Ketiga)
   const handleKodePosChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/\D/g, ''); 
     setKodePos(val);
-    setZipError(false); // Reset peringatan tiap ngetik ulang
+    setZipError(false); 
 
     if (val.length === 5) {
       setIsFetchingZip(true);
       try {
-        // PERCOBAAN 1: Balikin ke kodepos.vercel.app (paling relevan utk ID)
-        const res1 = await fetch(`https://kodepos.vercel.app/search?q=${val}`);
-        if (res1.ok) {
-          const result1 = await res1.json();
-          if (result1 && result1.data && result1.data.length > 0) {
-            const match = result1.data[0];
-            setKota(match.city || '');
-            setKecamatan(match.subdistrict || '');
-            setKelurahan(match.urban || '');
-            setIsFetchingZip(false);
-            return;
-          }
+        // Tembak langsung ke tabel internal Supabase yang udah lu upload
+        const { data, error } = await supabase
+          .from('tbl_kodepos')
+          .select('kelurahan, kecamatan, kabupaten, provinsi')
+          .eq('kodepos', val)
+          .single(); // Ambil 1 baris teratas yang cocok
+
+        if (error || !data) {
+          throw new Error("Kode pos tidak ditemukan di Database Jakarta.");
         }
 
-        // PERCOBAAN 2: Jika API 1 mati/limit, fallback ke Zippopotamus
-        const res2 = await fetch(`https://api.zippopotam.us/ID/${val}`);
-        if (res2.ok) {
-          const result2 = await res2.json();
-          if (result2 && result2.places && result2.places.length > 0) {
-            const match = result2.places[0];
-            setKota(match.state || ''); 
-            setKelurahan(match['place name'] || '');
-            setIsFetchingZip(false);
-            return;
-          }
-        }
-
-        throw new Error("Semua API Publik sedang down");
-
+        // Mapping hasil SQL ke form input
+        setKota(data.kabupaten || '');
+        setKecamatan(data.kecamatan || '');
+        setKelurahan(data.kelurahan || '');
+        
       } catch (err) {
-        console.warn("API Kode Pos Gagal, beralih ke mode manual:", err);
-        setZipError(true); // Menyalakan tulisan peringatan merah
+        console.warn("Gagal tarik kode pos dari Supabase:", err);
+        setZipError(true); // Peringatan error merah nyala kalau di luar Jakarta/ga ada di DB
       } finally {
         setIsFetchingZip(false);
       }
@@ -310,7 +296,6 @@ export default function CartPage() {
               />
             </div>
 
-            {/* BLOK AUTO-FILL ALAMAT PINTAR */}
             <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
                <div>
                  <label className="block text-sm font-semibold text-gray-700 mb-1">Detail Jalan & Patokan</label>
@@ -329,7 +314,6 @@ export default function CartPage() {
                    placeholder="13540"
                  />
                  
-                 {/* ANIMASI LOADING */}
                  {isFetchingZip && (
                    <div className="absolute right-3 top-[34px] flex items-center gap-2">
                      <span className="text-[10px] font-bold text-gray-400 animate-pulse">MENCARI...</span>
@@ -337,10 +321,9 @@ export default function CartPage() {
                    </div>
                  )}
                  
-                 {/* INDIKATOR ERROR JIKA SEMUA API MATI */}
                  {zipError && !isFetchingZip && kodePos.length === 5 && (
                    <p className="text-[11px] text-red-500 font-bold mt-1.5 flex items-center gap-1">
-                     <span>⚠️</span> Gagal menarik data otomatis. Silakan isi manual ya.
+                     <span>⚠️</span> Data tidak ditemukan, silakan isi manual ya.
                    </p>
                  )}
                </div>
