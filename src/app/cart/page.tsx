@@ -64,6 +64,7 @@ export default function CartPage() {
     syncCartWithDB();
   }, []);
 
+  // MESIN ANTI-JEBOL: Multi-API Redundancy
   const handleKodePosChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/\D/g, ''); 
     setKodePos(val);
@@ -71,17 +72,39 @@ export default function CartPage() {
     if (val.length === 5) {
       setIsFetchingZip(true);
       try {
-        const res = await fetch(`https://kodepos.vercel.app/search?q=${val}`);
-        const result = await res.json();
-        
-        if (result && result.data && result.data.length > 0) {
-          const match = result.data[0];
-          setKota(match.city || '');
-          setKecamatan(match.subdistrict || '');
-          setKelurahan(match.urban || '');
+        // PERCOBAAN 1: API CariKodePos
+        const res1 = await fetch(`https://carikodepos.id/api/postal-codes?q=${val}&limit=1`);
+        if (res1.ok) {
+          const result1 = await res1.json();
+          if (result1 && result1.success && result1.data?.postalCodes?.length > 0) {
+            const match = result1.data.postalCodes[0];
+            setKota(match.city?.name || '');
+            setKecamatan(match.district?.name || '');
+            setKelurahan(match.village?.name || '');
+            setIsFetchingZip(false);
+            return;
+          }
         }
+
+        // PERCOBAAN 2: Jika API 1 mati/limit, fallback ke Zippopotamus
+        const res2 = await fetch(`https://api.zippopotam.us/ID/${val}`);
+        if (res2.ok) {
+          const result2 = await res2.json();
+          if (result2 && result2.places && result2.places.length > 0) {
+            const match = result2.places[0];
+            setKota(match.state || ''); 
+            setKelurahan(match['place name'] || '');
+            // Catatan: Zippopotamus tidak selalu punya data kecamatan lengkap
+            setIsFetchingZip(false);
+            return;
+          }
+        }
+
+        throw new Error("Semua API Publik sedang down");
+
       } catch (err) {
-        console.error("API Kode Pos Gagal, fallback ke manual", err);
+        // FALLBACK DARURAT: Tetap kalem, user tinggal ketik manual
+        console.warn("API Kode Pos Gagal, beralih ke mode manual:", err);
       } finally {
         setIsFetchingZip(false);
       }
@@ -285,7 +308,7 @@ export default function CartPage() {
               />
             </div>
 
-            {/* BLOK AUTO-FILL ALAMAT PINTAR YANG SUDAH DIURUTKAN */}
+            {/* BLOK AUTO-FILL ALAMAT PINTAR (SUDAH DIURUTKAN) */}
             <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
                <div>
                  <label className="block text-sm font-semibold text-gray-700 mb-1">Detail Jalan & Patokan</label>
