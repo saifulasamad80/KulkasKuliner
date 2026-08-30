@@ -15,9 +15,16 @@ export default function CartPage() {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    address: '',
     notes: '' 
   });
+  
+  const [kodePos, setKodePos] = useState('');
+  const [kota, setKota] = useState('');
+  const [kecamatan, setKecamatan] = useState('');
+  const [kelurahan, setKelurahan] = useState('');
+  const [detailJalan, setDetailJalan] = useState('');
+  
+  const [isFetchingZip, setIsFetchingZip] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -57,6 +64,30 @@ export default function CartPage() {
     syncCartWithDB();
   }, []);
 
+  const handleKodePosChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/\D/g, ''); 
+    setKodePos(val);
+
+    if (val.length === 5) {
+      setIsFetchingZip(true);
+      try {
+        const res = await fetch(`https://kodepos.vercel.app/search?q=${val}`);
+        const result = await res.json();
+        
+        if (result && result.data && result.data.length > 0) {
+          const match = result.data[0];
+          setKota(match.city || '');
+          setKecamatan(match.subdistrict || '');
+          setKelurahan(match.urban || '');
+        }
+      } catch (err) {
+        console.error("API Kode Pos Gagal, fallback ke manual", err);
+      } finally {
+        setIsFetchingZip(false);
+      }
+    }
+  };
+
   if (!isClient) return null;
 
   const totalAmount = items.reduce((total, item) => total + item.price * item.quantity, 0);
@@ -64,14 +95,14 @@ export default function CartPage() {
   const validateCheckoutForm = (nama: string, wa: string) => {
     const nameRegex = /^[a-zA-Z\s']{3,50}$/;
     if (!nameRegex.test(nama)) {
-      alert("NAMA DITOLAK: Hanya boleh berisi huruf dan spasi (Minimal 3 karakter). Dilarang menggunakan angka atau simbol aneh.");
+      alert("NAMA DITOLAK: Hanya boleh berisi huruf dan spasi.");
       return null;
     }
 
     const cleanWa = wa.replace(/\D/g, ''); 
     const waRegex = /^(08|628)[0-9]{7,12}$/;
     if (!waRegex.test(cleanWa)) {
-      alert("NOMOR WA DITOLAK: Harus berupa angka, diawali 08 atau 628, dan panjangnya 9-14 digit (contoh: 08123456789).");
+      alert("NOMOR WA DITOLAK: Harus berupa angka, diawali 08 atau 628, dan panjangnya 9-14 digit.");
       return null;
     }
 
@@ -86,17 +117,18 @@ export default function CartPage() {
     const validated = validateCheckoutForm(formData.name, formData.phone);
     if (!validated) return;
 
+    if (!kodePos || !kota || !kecamatan || !detailJalan) {
+       alert("Mohon lengkapi seluruh kolom alamat pengiriman!");
+       return;
+    }
+
     setIsLoading(true);
 
     try {
       const dateObj = new Date();
-      const yy = String(dateObj.getFullYear()).slice(-2);
-      const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const dd = String(dateObj.getDate()).padStart(2, '0');
-      const hh = String(dateObj.getHours()).padStart(2, '0');
-      const min = String(dateObj.getMinutes()).padStart(2, '0');
-      const ss = String(dateObj.getSeconds()).padStart(2, '0');
-      const orderNumber = `KUL-${yy}${mm}${dd}-${hh}${min}${ss}`;
+      const orderNumber = `KUL-${String(dateObj.getFullYear()).slice(-2)}${String(dateObj.getMonth() + 1).padStart(2, '0')}${String(dateObj.getDate()).padStart(2, '0')}-${String(dateObj.getHours()).padStart(2, '0')}${String(dateObj.getMinutes()).padStart(2, '0')}${String(dateObj.getSeconds()).padStart(2, '0')}`;
+
+      const alamatLengkap = `${detailJalan.trim()}, Kel. ${kelurahan}, Kec. ${kecamatan}, ${kota}, ${kodePos}`;
 
       const { error: dbError } = await supabase
         .from('orders')
@@ -105,8 +137,8 @@ export default function CartPage() {
           order_id: orderNumber,
           customer_name: validated.cleanName,
           customer_phone: validated.cleanWa,
-          shipping_address: formData.address,
-          customer_address: formData.address,
+          shipping_address: alamatLengkap,
+          customer_address: alamatLengkap,
           notes: formData.notes,
           total_amount: totalAmount,
           items: items,
@@ -144,7 +176,7 @@ export default function CartPage() {
       const orderDetails = items.map(item => `- ${item.quantity}x ${item.name} (Rp ${(item.price * item.quantity).toLocaleString('id-ID')})`).join('\n');
       const notesSection = formData.notes.trim() !== '' ? `\n\n*Catatan Tambahan:*\n_${formData.notes}_` : '';
 
-      const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya via *JALUR VIP*.\n\n*ORDER ID: ${orderNumber}*\n*Nama:* ${validated.cleanName}\n*No. WA:* ${validated.cleanWa}\n\n*Pesanan:*\n${orderDetails}\n\n*Total Belanja:* Rp ${totalAmount.toLocaleString('id-ID')}${notesSection}\n\nMohon cek sistem untuk detail alamat saya, dan infokan ongkos kirim Instan/Sameday beserta total transfer.\n\nTerima kasih.`;
+      const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya via *JALUR VIP*.\n\n*ORDER ID: ${orderNumber}*\n*Nama:* ${validated.cleanName}\n*No. WA:* ${validated.cleanWa}\n*Alamat Pengiriman:*\n${alamatLengkap}\n\n*Pesanan:*\n${orderDetails}\n\n*Total Belanja:* Rp ${totalAmount.toLocaleString('id-ID')}${notesSection}\n\nMohon infokan ongkos kirim Instan/Sameday beserta total transfer.\n\nTerima kasih.`;
       
       const waUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
 
@@ -228,7 +260,6 @@ export default function CartPage() {
           <h2 className="text-lg font-bold text-gray-900 mb-5">Detail Pengiriman</h2>
           <form onSubmit={handleCheckout} className="space-y-4">
             
-            {/* INJEKSI: Senjata Psikologi Jalur VIP */}
             <div className="bg-red-50 border border-red-200 p-3.5 rounded-lg mb-6 flex items-start gap-3">
               <span className="text-xl">🚀</span>
               <p className="text-[13px] text-red-900 font-medium leading-relaxed">
@@ -253,14 +284,50 @@ export default function CartPage() {
                 placeholder="08123456789"
               />
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Alamat Lengkap</label>
-              <textarea required rows={3} 
-                className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all" 
-                value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})}
-                placeholder="Contoh: Jl. Raya X No. 123, Patokan..."
-              />
+
+            {/* BLOK AUTO-FILL ALAMAT PINTAR YANG SUDAH DIURUTKAN */}
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
+               <div>
+                 <label className="block text-sm font-semibold text-gray-700 mb-1">Detail Jalan & Patokan</label>
+                 <textarea required rows={2} 
+                   className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all" 
+                   value={detailJalan} onChange={(e) => setDetailJalan(e.target.value)}
+                   placeholder="Contoh: Jl. Pahlawan No.12, Rumah pagar hitam..."
+                 />
+               </div>
+
+               <div className="relative">
+                 <label className="block text-sm font-semibold text-gray-700 mb-1">Kode Pos <span className="text-red-500 font-normal text-xs">(Ketik untuk Auto-Complete)</span></label>
+                 <input type="text" maxLength={5} required 
+                   className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all font-mono font-bold tracking-widest" 
+                   value={kodePos} onChange={handleKodePosChange}
+                   placeholder="13540"
+                 />
+                 {isFetchingZip && (
+                   <div className="absolute right-3 top-[34px] flex items-center gap-2">
+                     <span className="text-[10px] font-bold text-gray-400 animate-pulse">MENCARI...</span>
+                     <svg className="animate-spin h-4 w-4 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                   </div>
+                 )}
+               </div>
+
+               <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Kelurahan</label>
+                    <input type="text" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kelurahan} onChange={(e) => setKelurahan(e.target.value)} placeholder="Kelurahan" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Kecamatan</label>
+                    <input type="text" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kecamatan} onChange={(e) => setKecamatan(e.target.value)} placeholder="Kecamatan" />
+                  </div>
+               </div>
+
+               <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Kota/Kabupaten</label>
+                  <input type="text" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kota} onChange={(e) => setKota(e.target.value)} placeholder="Kota/Kabupaten" />
+               </div>
             </div>
+
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Catatan Tambahan <span className="text-gray-400 font-normal">(Opsional)</span></label>
               <input type="text" 
@@ -270,7 +337,6 @@ export default function CartPage() {
               />
             </div>
 
-            {/* FOODDASH CTA: Pill shape, primary red color */}
             <button type="submit" disabled={isLoading} className="w-full bg-red-600 text-white font-bold py-[14px] rounded-full mt-4 hover:bg-red-700 hover:shadow-lg transition-all active:scale-[0.98] flex justify-center items-center gap-2 shadow-sm">
               {isLoading ? (
                 <span>Memproses VIP...</span>
