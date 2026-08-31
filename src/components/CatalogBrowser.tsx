@@ -50,9 +50,10 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
     };
   }, [products]);
 
+  // INJEKSI UPDATE: Ubah label tombol biar pembeli gak bingung
   const categoryMeta = [
-    { id: "Semua", label: "All" }, // Diubah jadi 'All' biar makin persis referensi
-    { id: "Pasta", label: "Pasta" },
+    { id: "Semua", label: "All" }, 
+    { id: "Pasta", label: "Pasta & Pizza" }, 
     { id: "Kebab", label: "Kebab" },
     { id: "Durian", label: "Durian" },
     { id: "Pempek", label: "Pempek" },
@@ -61,20 +62,22 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
 
   const categories = categoryMeta.filter(c => c.id !== "Semua").map(c => c.id);
 
-  // LOGIKA ALGORITMA: Mengurutkan produk berdasarkan metrik Terjual tertinggi (maksimal 4 produk)
   const popularProducts = [...liveProducts]
     .sort((a, b) => (Number(b.rating_avg) || 0) - (Number(a.rating_avg) || 0))
     .slice(0, 4);
 
+  // INJEKSI ALGORITMA: Tambahin kata kunci "pizza" masuk ke kategori Pasta
   const getProductsByCategory = (cat: string) => {
     return liveProducts.filter((p) => {
       const nameLower = p.name.toLowerCase();
-      if (cat === "Pasta") return nameLower.includes("pasta");
+      
+      if (cat === "Pasta") return nameLower.includes("pasta") || nameLower.includes("pizza");
       if (cat === "Kebab") return nameLower.includes("kebab");
       if (cat === "Durian") return nameLower.includes("durian");
       if (cat === "Pempek") return nameLower.includes("pempek");
       if (cat === "Lauk & Cemilan") {
         return !nameLower.includes("pasta") && 
+               !nameLower.includes("pizza") && 
                !nameLower.includes("kebab") && 
                !nameLower.includes("durian") && 
                !nameLower.includes("pempek");
@@ -91,7 +94,6 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
   return (
     <div className="w-full">
       
-      {/* AREA SEARCH & KAPSUL FILTER */}
       <div className="mb-8 space-y-4">
         
         <div className="relative max-w-xl mx-auto">
@@ -107,7 +109,6 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
           </svg>
         </div>
 
-        {/* TOMBOL KAPSUL GAYA FOODDASH (Abu-abu Balon / bg-gray-100) */}
         {!isSearching && (
           <div className="flex overflow-x-auto gap-2 pb-2 custom-scrollbar justify-start md:justify-center px-1">
             {categoryMeta.map((cat) => (
@@ -127,7 +128,6 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
         )}
       </div>
 
-      {/* AREA ETALASE PRODUK */}
       {isSearching ? (
         searchResults.length === 0 ? (
           <div className="bg-white p-12 text-center rounded-xl border border-gray-100">
@@ -141,7 +141,6 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
       ) : activeCategory === "Semua" ? (
         <div className="space-y-10">
           
-          {/* INJEKSI: RAK MENU TERPOPULER DI POSISI PALING ATAS */}
           {popularProducts.length > 0 && (
             <div className="pt-2">
               <h3 className="text-[18px] font-bold text-gray-900 mb-4 px-1 flex items-center gap-2">
@@ -154,14 +153,16 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
             </div>
           )}
 
-          {/* RAK KATEGORI LAINNYA DI BAWAHNYA */}
           {categories.map(cat => {
              const catProducts = getProductsByCategory(cat);
              if (catProducts.length === 0) return null;
              
              return (
                <div key={cat} className="pt-4 border-t border-gray-100">
-                  <h3 className="text-[18px] font-bold text-gray-900 mb-4 px-1">{cat}</h3>
+                  <h3 className="text-[18px] font-bold text-gray-900 mb-4 px-1">
+                     {/* Ubah text judul rak untuk khusus kategori Pasta */}
+                     {cat === "Pasta" ? "Pasta & Pizza" : cat}
+                  </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                     {catProducts.map(p => <ProductCard key={p.id} product={p} />)}
                   </div>
