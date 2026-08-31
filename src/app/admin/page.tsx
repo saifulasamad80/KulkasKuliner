@@ -157,10 +157,15 @@ export default function AdminDashboard() {
                 className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
                 value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} 
               />
-              <textarea placeholder="Deskripsi Produk (Maksimal terlihat 2 baris)" rows={2}
-                className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
-                value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} 
-              />
+              <div className="relative">
+                <textarea placeholder="Deskripsi Produk (Maksimal 90 huruf biar gak kepotong)" rows={2} maxLength={90}
+                  className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow pr-12" 
+                  value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} 
+                />
+                <span className={`absolute bottom-3 right-3 text-[10px] font-black ${newProduct.description?.length >= 90 ? 'text-red-600 animate-pulse' : 'text-gray-400'}`}>
+                  {newProduct.description?.length || 0}/90
+                </span>
+              </div>
               <div className="flex gap-2">
                 <input type="number" placeholder="Harga (Rp)" required min="1"
                   className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
@@ -200,10 +205,15 @@ export default function AdminDashboard() {
                       className="w-full p-2 border border-gray-300 rounded text-sm font-bold bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} 
                     />
-                    <textarea placeholder="Deskripsi" rows={2}
-                      className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
-                      value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} 
-                    />
+                    <div className="relative">
+                      <textarea placeholder="Deskripsi (Maksimal 90 huruf)" rows={2} maxLength={90}
+                        className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none pr-12" 
+                        value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} 
+                      />
+                      <span className={`absolute bottom-3 right-3 text-[10px] font-black ${editForm.description?.length >= 90 ? 'text-red-600 animate-pulse' : 'text-gray-400'}`}>
+                        {editForm.description?.length || 0}/90
+                      </span>
+                    </div>
                     <div className="flex gap-2">
                       <input type="number" placeholder="Harga"
                         className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
