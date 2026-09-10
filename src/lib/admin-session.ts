@@ -62,7 +62,12 @@ export async function verifyAdminPin(pin: string) {
     throw new Error('PIN admin tidak dapat diverifikasi.');
   }
 
-  const expectedPin = typeof data?.setting_value === 'string' ? data.setting_value : '';
+  // Database remains the primary source; the env fallback keeps the previous
+  // ADMIN_PASSWORD deployment compatible during the migration.
+  const expectedPin =
+    typeof data?.setting_value === 'string' && data.setting_value.length > 0
+      ? data.setting_value
+      : process.env.ADMIN_PASSWORD?.trim() || '';
   return expectedPin.length > 0 && safeEqual(pin, expectedPin);
 }
 
