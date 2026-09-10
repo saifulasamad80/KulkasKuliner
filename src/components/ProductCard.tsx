@@ -2,8 +2,9 @@
 
 import { useCartStore } from '@/store/useCartStore';
 import { useState } from 'react';
+import type { Product } from '@/lib/types';
 
-export default function ProductCard({ product }: { product: any }) {
+export default function ProductCard({ product }: { product: Product }) {
   const { addItem, items } = useCartStore();
   
   // STATE BARU BUAT ANIMASI TOMBOL
@@ -16,7 +17,12 @@ export default function ProductCard({ product }: { product: any }) {
 
   const handleAdd = () => {
     if (isOutOfStock) return;
-    addItem({ ...product, quantity: 1 });
+    addItem({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      stock: product.stock,
+    });
     
     // NYALAKAN ANIMASI
     setIsAdded(true);
@@ -25,10 +31,6 @@ export default function ProductCard({ product }: { product: any }) {
     }, 1500); // Balik ke normal setelah 1.5 detik
   };
 
-  const fakeOriginalPrice = product.price * 1.2;
-
-  const totalTerjual = product.rating_avg ? Math.floor(Number(product.rating_avg)) : 0;
-  const isFavorit = totalTerjual >= 10; 
   const realDescription = product.description || "Deskripsi belum tersedia.";
 
   return (
@@ -36,7 +38,7 @@ export default function ProductCard({ product }: { product: any }) {
       
       <div className="aspect-[4/3] w-full bg-gray-50 overflow-hidden relative">
         <img 
-          src={product.image_url} 
+          src={product.image_url || '/icon.png'} 
           alt={product.name} 
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
         />
@@ -48,11 +50,6 @@ export default function ProductCard({ product }: { product: any }) {
           </div>
         )}
 
-        {isFavorit && (
-          <div className="absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1 z-10">
-            <span>⭐</span> POPULER
-          </div>
-        )}
       </div>
 
       <div className="p-[16px] flex flex-col flex-1 bg-white">
@@ -60,16 +57,6 @@ export default function ProductCard({ product }: { product: any }) {
         <div className="flex justify-between items-start mb-0.5 gap-2">
           <h3 className="font-semibold text-gray-900 text-[15px] leading-[20px] line-clamp-2">{product.name}</h3>
           
-          <div className="flex flex-col items-end shrink-0">
-            <div className="flex items-center gap-1 text-[12px] font-bold text-gray-700">
-              <span className="text-orange-500 text-[14px]">🛒</span> {totalTerjual} Terjual
-            </div>
-            {isFavorit && (
-              <div className="flex items-center gap-1 text-[11px] text-red-500 font-bold mt-0.5 bg-red-50 px-1.5 py-0.5 rounded">
-                ❤️ Favorit
-              </div>
-            )}
-          </div>
         </div>
 
         <p className="text-[12px] text-gray-500 mb-3 line-clamp-2 font-medium leading-relaxed mt-2">
@@ -78,7 +65,6 @@ export default function ProductCard({ product }: { product: any }) {
         
         <div className="flex items-center gap-2 mb-3 mt-auto">
           <p className="text-[16px] font-bold text-gray-900">Rp {product.price.toLocaleString('id-ID')}</p>
-          <p className="text-[12px] font-medium text-gray-400 line-through">Rp {fakeOriginalPrice.toLocaleString('id-ID')}</p>
         </div>
 
         <div className="mb-3">
@@ -102,6 +88,7 @@ export default function ProductCard({ product }: { product: any }) {
         {/* TOMBOL BERUBAH WARNA SAAT DIKLIK */}
         <button
           onClick={handleAdd}
+          aria-label={`Tambah ${product.name} ke keranjang`}
           disabled={isOutOfStock || isAdded}
           className={`w-full font-semibold py-[10px] rounded-full text-[14px] transition-all active:scale-[0.97] shadow-sm flex items-center justify-center gap-2 ${
             isOutOfStock 
@@ -118,7 +105,7 @@ export default function ProductCard({ product }: { product: any }) {
               </svg>
               Ditambahkan!
             </>
-          ) : "Order Now"}
+          ) : "Tambah"}
         </button>
       </div>
     </div>

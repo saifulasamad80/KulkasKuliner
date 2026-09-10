@@ -1,15 +1,15 @@
 import { supabase } from '@/lib/supabase';
 import HeaderCart from '@/components/HeaderCart'; 
-import Link from 'next/link';
 import PwaInstallButton from '@/components/PwaInstallButton';
 import CatalogBrowser from '@/components/CatalogBrowser';
+import type { Product } from '@/lib/types';
 
 export const revalidate = 60;
 
 export default async function Home() {
   const { data: products, error } = await supabase
     .from('products')
-    .select('*')
+    .select('id, name, price, stock, image_url, is_active, description')
     .eq('is_active', true) 
     .order('name', { ascending: true });
 
@@ -29,7 +29,7 @@ export default async function Home() {
     <main className="min-h-screen bg-white relative pb-20">
       
       <div className="bg-orange-600 text-white text-[12px] md:text-sm font-bold text-center py-2.5 px-4 shadow-sm relative z-50 tracking-wide">
-        🔥 PROMO HARI INI: Nikmati Harga Spesial & Otomatis Masuk Antrean VIP via Website!
+        PROMO HARI INI: Nikmati harga spesial dan kirim pesanan cepat via WhatsApp.
       </div>
 
       <header className="bg-white sticky top-0 z-40 border-b border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.03)] backdrop-blur-md bg-white/90">
@@ -87,7 +87,7 @@ export default async function Home() {
               <p className="text-gray-500 font-medium text-lg">Semua produk sedang habis atau diarsipkan.</p>
             </div>
           ) : (
-            <CatalogBrowser products={products} />
+            <CatalogBrowser products={products as Product[]} />
           )}
         </div>
       </section>

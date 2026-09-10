@@ -1,13 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-
-export interface CartItem {
-  id: string;
-  name: string;
-  price: number;
-  stock: number;
-  quantity: number;
-}
+import type { CartItem } from '@/lib/types';
 
 interface CartState {
   items: CartItem[];
@@ -16,7 +9,7 @@ interface CartState {
   decreaseQty: (id: string) => void;
   removeItem: (id: string) => void;
   clearCart: () => void;
-  // RESOLUSI INFINITE LOOP: Fungsi ini sekarang resmi menjadi bagian dari Store
+  updateItemStock: (id: string, stock: number, name?: string) => void;
   decreaseItemToMaxStock: (id: string, maxStock: number) => void;
 }
 
@@ -84,13 +77,28 @@ export const useCartStore = create<CartState>()(
 
       clearCart: () => set({ items: [] }),
 
-      // Implementasi fungsi penyesuaian stok yang aman dari re-render
-      decreaseItemToMaxStock: (id, maxStock) => {
-        const currentItems = get().items;
+      updateItemStock: (id, stock, name) => {
         set({
-          items: currentItems.map((item) => 
-            item.id === id ? { ...item, quantity: maxStock } : item
-          )
+          items: get().items.map((item) =>
+            item.id === id
+              ? { ...item, stock, ...(name ? { name } : {}) }
+              : item
+          ),
+        });
+      },
+
+      decreaseItemToMaxStock: (id, maxStock) => {
+        if (maxStock <= 0) {
+          set({ items: get().items.filter((item) => item.id !== id) });
+          return;
+        }
+
+        set({
+          items: get().items.map((item) =>
+            item.id === id
+              ? { ...item, quantity: Math.min(item.quantity, maxStock), stock: maxStock }
+              : item
+          ),
         });
       }
     }),

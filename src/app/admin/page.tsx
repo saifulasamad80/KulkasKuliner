@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
 import { useAdminData } from '@/hooks/useAdminData';
 
 export default function AdminDashboard() {
@@ -13,73 +12,90 @@ export default function AdminDashboard() {
 
   const { 
     orders, products, totalRevenue, isLoading, 
-    fetchData, updateOrderStatus, toggleProductActive 
-  } = useAdminData();
+    createProduct, updateProduct, updateOrderStatus, toggleProductActive 
+  } = useAdminData(isAuthenticated);
   
   const [isAdding, setIsAdding] = useState(false);
   
-  const [newProduct, setNewProduct] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0, rating_count: 0 });
+  const [newProduct, setNewProduct] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0, rating_count: 0 });
+  const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '' });
 
   useEffect(() => {
-    const savedSession = sessionStorage.getItem('kuliner_admin_auth');
-    if (savedSession === "authenticated") {
-      setIsAuthenticated(true);
-    }
-    setIsCheckingAuth(false);
+    let active = true;
+    const checkSession = async () => {
+      try {
+        const response = await fetch('/api/admin/auth', { cache: 'no-store' });
+        const data = (await response.json()) as { authenticated?: boolean };
+        if (active) setIsAuthenticated(data.authenticated === true);
+      } catch (error) {
+        if (active) console.error('Sesi admin gagal diverifikasi:', error);
+      } finally {
+        if (active) setIsCheckingAuth(false);
+      }
+    };
+
+    void checkSession();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsVerifying(true);
     try {
-      const { data, error } = await supabase
-        .from('store_settings')
-        .select('setting_value')
-        .eq('setting_key', 'admin_secret_pin')
-        .single();
+      const response = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinInput }),
+      });
 
-      if (error || !data) throw new Error("Gagal terhubung ke server keamanan.");
-
-      if (pinInput === data.setting_value) {
-        sessionStorage.setItem('kuliner_admin_auth', 'authenticated');
+      if (response.ok) {
         setIsAuthenticated(true);
       } else {
         alert("PIN Akses Ditolak!");
         setPinInput("");
       }
-    } catch (err) {
-      console.error(err);
-      alert("Kesalahan sistem. Pastikan key 'admin_secret_pin' ada di tabel store_settings.");
+    } catch (error) {
+      console.error('Login admin gagal:', error);
+      alert("Kesalahan sistem saat memverifikasi PIN.");
     } finally {
       setIsVerifying(false);
     }
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem('kuliner_admin_auth');
+    void fetch('/api/admin/auth', { method: 'DELETE' });
     setIsAuthenticated(false);
-    window.location.href = '/';
   };
 
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProduct.name || newProduct.price <= 0) return alert("Nama dan Harga wajib diisi valid!");
-    const { error } = await supabase.from('products').insert([{ ...newProduct, is_active: true }]);
-    if (error) alert(`Gagal: ${error.message}`);
-    else { 
+    try {
+      await createProduct(newProduct);
       alert("Produk ditambah!"); 
       setIsAdding(false); 
-      setNewProduct({ name: '', price: 0, stock: 0, image_url: '', description: '', rating_avg: 0, rating_count: 0 }); 
-      fetchData(); 
+      setNewProduct({ name: '', price: 0, stock: 0, image_url: '', description: '' }); 
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Produk gagal disimpan.');
     }
   };
 
   const saveEditProduct = async (id: string) => {
-    const { error } = await supabase.from('products').update(editForm).eq('id', id);
-    if (error) alert(`Gagal update: ${error.message}`);
-    else { setEditingId(null); fetchData(); }
+    try {
+      await updateProduct(id, {
+        name: editForm.name,
+        price: editForm.price,
+        stock: editForm.stock,
+        image_url: editForm.image_url,
+        description: editForm.description,
+      });
+      setEditingId(null);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Produk gagal diperbarui.');
+    }
   };
 
   if (isCheckingAuth) return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-white">Verifikasi Keamanan...</p></div>;
@@ -176,16 +192,6 @@ export default function AdminDashboard() {
                   value={newProduct.stock || ''} onChange={e => setNewProduct({...newProduct, stock: parseInt(e.target.value)})} 
                 />
               </div>
-              <div className="flex gap-2">
-                <input type="number" placeholder="Total Terjual (Manual)"
-                  className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
-                  value={newProduct.rating_avg || ''} onChange={e => setNewProduct({...newProduct, rating_avg: parseInt(e.target.value)})} 
-                />
-                <input type="number" placeholder="Total Favorit (Manual)"
-                  className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
-                  value={newProduct.rating_count || ''} onChange={e => setNewProduct({...newProduct, rating_count: parseInt(e.target.value)})} 
-                />
-              </div>
               <input type="url" placeholder="URL Foto Absolut (Raw GitHub)" 
                 className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow" 
                 value={newProduct.image_url} onChange={e => setNewProduct({...newProduct, image_url: e.target.value})} 
@@ -224,16 +230,6 @@ export default function AdminDashboard() {
                         value={editForm.stock} onChange={e => setEditForm({...editForm, stock: parseInt(e.target.value)})} 
                       />
                     </div>
-                    <div className="flex gap-2">
-                      <input type="number" placeholder="Total Terjual"
-                        className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
-                        value={editForm.rating_avg || ''} onChange={e => setEditForm({...editForm, rating_avg: parseInt(e.target.value)})} 
-                      />
-                      <input type="number" placeholder="Total Favorit"
-                        className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
-                        value={editForm.rating_count || ''} onChange={e => setEditForm({...editForm, rating_count: parseInt(e.target.value)})} 
-                      />
-                    </div>
                     <input type="text" placeholder="URL Foto Absolut" 
                       className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none" 
                       value={editForm.image_url} onChange={e => setEditForm({...editForm, image_url: e.target.value})} 
@@ -248,7 +244,7 @@ export default function AdminDashboard() {
                     {/* TAMPILAN ITEM DI ADMIN */}
                     <div className="flex items-center gap-4">
                       <div className="w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-                        <img src={prod.image_url} alt={prod.name} className="w-full h-full object-cover" />
+                        <img src={prod.image_url || '/icon.png'} alt={prod.name} className="w-full h-full object-cover" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="font-bold text-sm text-gray-900 leading-tight truncate">{prod.name}</h3>
@@ -258,12 +254,6 @@ export default function AdminDashboard() {
                           <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${prod.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                             SISA: {prod.stock}
                           </span>
-                          
-                          {/* INJEKSI METRIK TERJUAL DI SINI */}
-                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
-                            🛒 {prod.rating_avg ? Math.floor(Number(prod.rating_avg)) : 0} Terjual
-                          </span>
-
                           {!prod.is_active && <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-gray-800 text-white">DIARSIPKAN</span>}
                         </div>
                       </div>
@@ -276,10 +266,8 @@ export default function AdminDashboard() {
                             name: prod.name, 
                             price: prod.price, 
                             stock: prod.stock, 
-                            image_url: prod.image_url,
-                            description: prod.description || '',
-                            rating_avg: prod.rating_avg || 0,
-                            rating_count: prod.rating_count || 0
+                            image_url: prod.image_url || '',
+                            description: prod.description || ''
                           }); 
                         }} 
                         className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
@@ -287,7 +275,7 @@ export default function AdminDashboard() {
                         Edit Item
                       </button>
                       <span className="text-gray-300">|</span>
-                      <button onClick={() => toggleProductActive(prod.id, prod.is_active)} className={`text-xs font-bold transition-colors ${prod.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-600 hover:text-green-800'}`}>
+                      <button onClick={() => void toggleProductActive(prod.id, prod.is_active).catch((error: unknown) => alert(error instanceof Error ? error.message : 'Produk gagal diperbarui.'))} className={`text-xs font-bold transition-colors ${prod.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-600 hover:text-green-800'}`}>
                         {prod.is_active ? 'Sembunyikan' : 'Tampilkan Publik'}
                       </button>
                     </div>
@@ -335,7 +323,7 @@ export default function AdminDashboard() {
                   <div>
                     <ul className="space-y-2 mb-4">
                       {order.items && order.items.length > 0 ? (
-                        order.items.map((item: any, idx: number) => (
+                        order.items.map((item, idx) => (
                           <li key={idx} className="flex justify-between items-start text-sm border-b border-gray-50 pb-2 last:border-0">
                             <span className="font-medium text-gray-800 pr-4">
                               <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded mr-1">{item.quantity}x</span> 
@@ -347,7 +335,7 @@ export default function AdminDashboard() {
                           </li>
                         ))
                       ) : (
-                        order.order_items?.map((item: any) => (
+                        order.order_items?.map((item) => (
                           <li key={item.id} className="flex justify-between items-start text-sm border-b border-gray-50 pb-2 last:border-0">
                             <span className="font-medium text-gray-800 pr-4">
                               <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded mr-1">{item.quantity}x</span> 
@@ -370,8 +358,8 @@ export default function AdminDashboard() {
                       {order.status}
                     </span>
                     <div className="flex gap-2">
-                      {order.status === 'unpaid' && ( <button onClick={() => updateOrderStatus(order.id, 'paid')} className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm focus:ring-2 focus:ring-blue-400 outline-none">Set Lunas</button> )}
-                      {order.status !== 'canceled' && order.status !== 'completed' && ( <button onClick={() => updateOrderStatus(order.id, 'canceled')} className="bg-white text-red-600 border border-red-200 px-4 py-1.5 rounded text-xs font-bold hover:bg-red-50 transition-colors shadow-sm focus:ring-2 focus:ring-red-400 outline-none">Batalkan</button> )}
+                      {order.status === 'unpaid' && ( <button onClick={() => void updateOrderStatus(order.id, 'paid').catch((error: unknown) => alert(error instanceof Error ? error.message : 'Status gagal diperbarui.'))} className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm focus:ring-2 focus:ring-blue-400 outline-none">Set Lunas</button> )}
+                      {order.status === 'unpaid' && ( <button onClick={() => void updateOrderStatus(order.id, 'canceled').catch((error: unknown) => alert(error instanceof Error ? error.message : 'Status gagal diperbarui.'))} className="bg-white text-red-600 border border-red-200 px-4 py-1.5 rounded text-xs font-bold hover:bg-red-50 transition-colors shadow-sm focus:ring-2 focus:ring-red-400 outline-none">Batalkan</button> )}
                     </div>
                   </div>
                 </div>

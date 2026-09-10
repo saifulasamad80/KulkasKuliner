@@ -3,25 +3,24 @@
 import { useState, useEffect } from 'react';
 import ProductCard from './ProductCard';
 import { supabase } from '@/lib/supabase';
+import type { Product } from '@/lib/types';
 
-export default function CatalogBrowser({ products }: { products: any[] }) {
+export default function CatalogBrowser({ products }: { products: Product[] }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("Semua");
   
   const [liveProducts, setLiveProducts] = useState(products);
 
   useEffect(() => {
-    setLiveProducts(products);
-
     const fetchFreshestData = async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('*')
+        .select('id, name, price, stock, image_url, is_active, description')
         .eq('is_active', true)
         .order('name', { ascending: true });
       
       if (data && !error) {
-        setLiveProducts(data); 
+        setLiveProducts(data as Product[]); 
       }
     };
     fetchFreshestData();
@@ -32,14 +31,24 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'products' }, 
         (payload) => {
+          const changedProduct = payload.new as unknown as Product;
           if (payload.eventType === 'UPDATE') {
-            setLiveProducts((current) => 
-              current.map((p) => (p.id === payload.new.id ? { ...p, ...payload.new } : p))
-            );
-          } else if (payload.eventType === 'INSERT') {
-            setLiveProducts((current) => [...current, payload.new]);
+            setLiveProducts((current) => {
+              if (!changedProduct.is_active) {
+                return current.filter((p) => p.id !== changedProduct.id);
+              }
+              const exists = current.some((p) => p.id === changedProduct.id);
+              return exists
+                ? current.map((p) => (p.id === changedProduct.id ? changedProduct : p))
+                : [...current, changedProduct];
+            });
+          } else if (payload.eventType === 'INSERT' && changedProduct.is_active) {
+            setLiveProducts((current) => (
+              current.some((p) => p.id === changedProduct.id) ? current : [...current, changedProduct]
+            ));
           } else if (payload.eventType === 'DELETE') {
-            setLiveProducts((current) => current.filter((p) => p.id !== payload.old.id));
+            const deletedId = (payload.old as { id?: string }).id;
+            setLiveProducts((current) => current.filter((p) => p.id !== deletedId));
           }
         }
       )
@@ -52,7 +61,7 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
 
   // INJEKSI UPDATE: Ubah label tombol biar pembeli gak bingung
   const categoryMeta = [
-    { id: "Semua", label: "All" }, 
+    { id: "Semua", label: "Semua" }, 
     { id: "Pasta", label: "Pasta & Pizza" }, 
     { id: "Kebab", label: "Kebab" },
     { id: "Durian", label: "Durian" },
@@ -61,10 +70,6 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
   ];
 
   const categories = categoryMeta.filter(c => c.id !== "Semua").map(c => c.id);
-
-  const popularProducts = [...liveProducts]
-    .sort((a, b) => (Number(b.rating_avg) || 0) - (Number(a.rating_avg) || 0))
-    .slice(0, 4);
 
   // INJEKSI ALGORITMA: Tambahin kata kunci "pizza" masuk ke kategori Pasta
   const getProductsByCategory = (cat: string) => {
@@ -99,7 +104,8 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
         <div className="relative max-w-xl mx-auto">
           <input 
             type="text" 
-            placeholder="Search for frozen food or meals..." 
+            placeholder="Cari frozen food atau lauk..." 
+            aria-label="Cari produk"
             className="w-full pl-11 pr-4 py-[10px] bg-white border-none rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.08)] focus:ring-2 focus:ring-red-600 outline-none text-gray-700 text-[14px] transition-all"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -140,19 +146,6 @@ export default function CatalogBrowser({ products }: { products: any[] }) {
         )
       ) : activeCategory === "Semua" ? (
         <div className="space-y-10">
-          
-          {popularProducts.length > 0 && (
-            <div className="pt-2">
-              <h3 className="text-[18px] font-bold text-gray-900 mb-4 px-1 flex items-center gap-2">
-                Popular Menu 
-                <span className="text-red-500 text-[14px]">🔥</span>
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-                {popularProducts.map(p => <ProductCard key={p.id} product={p} />)}
-              </div>
-            </div>
-          )}
-
           {categories.map(cat => {
              const catProducts = getProductsByCategory(cat);
              if (catProducts.length === 0) return null;

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kulkaskuliner-v1.0';
+const CACHE_NAME = 'kulkaskuliner-v2';
 
 // Aset statis yang mutlak harus ada untuk PWA
 const urlsToCache = [
@@ -32,6 +32,10 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
   // 1. BYPASS MUTLAK: Jangan pernah sentuh URL Admin, Supabase API, atau file internal Vercel/Next.js
   if (
     url.pathname.startsWith('/admin') ||
@@ -42,18 +46,18 @@ self.addEventListener('fetch', (event) => {
   }
 
   // 2. NETWORK-FIRST (Fallback to Cache): Untuk navigasi HTML (Katalog & Cart)
-  if (request.mode === 'navigate' || request.headers.get('accept').includes('text/html')) {
+  if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Update cache diam-diam dengan HTML terbaru
+          if (!response.ok) return response;
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
           return response;
         })
         .catch(() => {
           // Jika offline, berikan versi cache
-          return caches.match(request);
+          return caches.match(request).then((cached) => cached || caches.match('/'));
         })
     );
     return;

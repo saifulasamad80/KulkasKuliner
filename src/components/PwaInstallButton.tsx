@@ -2,43 +2,44 @@
 
 import { useEffect, useState, useRef } from "react";
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+interface IOSNavigator extends Navigator {
+  standalone?: boolean;
+}
+
 export default function PwaInstallButton() {
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIosPrompt, setIsIosPrompt] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
   
-  const deferredPromptRef = useRef<any>(null);
+  const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    // 1. Cek apakah Aplikasi sudah terinstal di HP
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setIsInstalled(true);
-    }
-    window.addEventListener('appinstalled', () => {
-      setIsInstalled(true);
-    });
-
-    // 2. RADAR ANDROID/CHROME
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault(); 
-      deferredPromptRef.current = e; 
+    const handleInstalled = () => setIsInstalled(true);
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      deferredPromptRef.current = event as BeforeInstallPromptEvent;
       setIsIosPrompt(false);
     };
+
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      window.setTimeout(() => setIsInstalled(true), 0);
+    }
+    window.addEventListener('appinstalled', handleInstalled);
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
-    // 3. RADAR iOS / SAFARI
-    const isIos = () => {
-      const userAgent = window.navigator.userAgent.toLowerCase();
-      return /iphone|ipad|ipod/.test(userAgent);
-    };
-    const isInStandaloneMode = () => {
-      return ('standalone' in window.navigator) && (window.navigator as any).standalone;
-    };
-    if (isIos() && !isInStandaloneMode()) {
-      setIsIosPrompt(true);
+    const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+    const isInStandaloneMode = (window.navigator as IOSNavigator).standalone === true;
+    if (isIos && !isInStandaloneMode) {
+      window.setTimeout(() => setIsIosPrompt(true), 0);
     }
 
     return () => {
+      window.removeEventListener('appinstalled', handleInstalled);
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     };
   }, []);

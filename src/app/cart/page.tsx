@@ -1,14 +1,21 @@
 "use client";
 
 import { useCartStore } from '@/store/useCartStore';
-import { supabase } from '@/lib/supabase';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import type { CheckoutResponse } from '@/lib/types';
 
 export default function CartPage() {
-  const { items, increaseQty, decreaseQty, removeItem, clearCart, decreaseItemToMaxStock } = useCartStore();
+  const {
+    items,
+    increaseQty,
+    decreaseQty,
+    removeItem,
+    clearCart,
+    updateItemStock,
+    decreaseItemToMaxStock,
+  } = useCartStore();
 
-  const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [syncingStock, setSyncingStock] = useState(true);
   
@@ -28,24 +35,27 @@ export default function CartPage() {
   const [zipError, setZipError] = useState(false);
 
   useEffect(() => {
-    setIsClient(true);
-    
+    let isActive = true;
+
     const syncCartWithDB = async () => {
       const currentItems = useCartStore.getState().items;
       const itemIds = currentItems.map(i => i.id);
       
       if(itemIds.length === 0) {
-        setSyncingStock(false);
+        if (isActive) setSyncingStock(false);
         return;
       }
 
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, stock, name')
-        .in('id', itemIds);
+      try {
+        const response = await fetch(`/api/products/availability?ids=${encodeURIComponent(itemIds.join(','))}`, {
+          cache: 'no-store',
+        });
+        if (!response.ok) throw new Error('Stok tidak dapat disinkronkan.');
+        const result = (await response.json()) as {
+          products?: Array<{ id: string; stock: number; name: string }>;
+        };
 
-      if (data && !error) {
-        data.forEach(dbItem => {
+        result.products?.forEach(dbItem => {
           const cartItem = currentItems.find(ci => ci.id === dbItem.id);
           
           if (cartItem) {
@@ -53,45 +63,51 @@ export default function CartPage() {
                removeItem(cartItem.id);
                alert(`Maaf, ${dbItem.name} baru saja habis dibeli orang lain dan telah dihapus dari keranjang Anda.`);
             } else if (cartItem.quantity > dbItem.stock) {
+               updateItemStock(cartItem.id, dbItem.stock, dbItem.name);
                decreaseItemToMaxStock(cartItem.id, dbItem.stock);
                alert(`Stok ${dbItem.name} menurun. Kuantitas pesanan Anda disesuaikan menjadi sisa stok (${dbItem.stock}).`);
+            } else {
+              updateItemStock(cartItem.id, dbItem.stock, dbItem.name);
             }
           }
         });
+      } catch (error) {
+        console.error('Sinkronisasi stok gagal:', error);
+      } finally {
+        if (isActive) setSyncingStock(false);
       }
-      setSyncingStock(false);
     };
 
-    syncCartWithDB();
-  }, []);
+    void syncCartWithDB();
+    return () => {
+      isActive = false;
+    };
+  }, [decreaseItemToMaxStock, removeItem, updateItemStock]);
 
-  // INJEKSI ALGORITMA: DATABASE SUPABASE (Super Cepat, Tanpa Pihak Ketiga)
   const handleKodePosChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/\D/g, ''); 
     setKodePos(val);
     setZipError(false); 
+    if (val.length < 5) {
+      setKota('');
+      setKecamatan('');
+      setKelurahan('');
+    }
 
     if (val.length === 5) {
       setIsFetchingZip(true);
       try {
-        // Tembak langsung ke tabel internal Supabase yang udah lu upload
-        const { data, error } = await supabase
-          .from('tbl_kodepos')
-          .select('kelurahan, kecamatan, kabupaten, provinsi')
-          .eq('kodepos', val)
-          .single(); // Ambil 1 baris teratas yang cocok
+        const response = await fetch(`/api/postal-code?code=${val}`, { cache: 'no-store' });
+        const result = (await response.json()) as {
+          data?: { kelurahan?: string; kecamatan?: string; kabupaten?: string };
+        };
+        if (!response.ok || !result.data) throw new Error('Kode pos tidak ditemukan.');
 
-        if (error || !data) {
-          throw new Error("Kode pos tidak ditemukan di Database Jakarta.");
-        }
-
-        // Mapping hasil SQL ke form input
-        setKota(data.kabupaten || '');
-        setKecamatan(data.kecamatan || '');
-        setKelurahan(data.kelurahan || '');
-        
-      } catch (err) {
-        console.warn("Gagal tarik kode pos dari Supabase:", err);
+        setKota(result.data.kabupaten || '');
+        setKecamatan(result.data.kecamatan || '');
+        setKelurahan(result.data.kelurahan || '');
+      } catch (error) {
+        console.warn('Gagal menarik data kode pos:', error);
         setZipError(true); // Peringatan error merah nyala kalau di luar Jakarta/ga ada di DB
       } finally {
         setIsFetchingZip(false);
@@ -99,19 +115,18 @@ export default function CartPage() {
     }
   };
 
-  if (!isClient) return null;
-
   const totalAmount = items.reduce((total, item) => total + item.price * item.quantity, 0);
 
   const validateCheckoutForm = (nama: string, wa: string) => {
-    const nameRegex = /^[a-zA-Z\s']{3,50}$/;
-    if (!nameRegex.test(nama)) {
+    const cleanName = nama.trim();
+    const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s'.-]{2,49}$/u;
+    if (!nameRegex.test(cleanName)) {
       alert("NAMA DITOLAK: Hanya boleh berisi huruf dan spasi.");
       return null;
     }
 
     const cleanWa = wa.replace(/\D/g, ''); 
-    const waRegex = /^(08|628)[0-9]{7,12}$/;
+    const waRegex = /^(?:08[0-9]{8,11}|628[0-9]{8,11})$/;
     if (!waRegex.test(cleanWa)) {
       alert("NOMOR WA DITOLAK: Harus berupa angka, diawali 08 atau 628, dan panjangnya 9-14 digit.");
       return null;
@@ -119,7 +134,7 @@ export default function CartPage() {
 
     const formattedWa = cleanWa.startsWith('0') ? '62' + cleanWa.substring(1) : cleanWa;
     
-    return { cleanName: nama.trim(), cleanWa: formattedWa };
+    return { cleanName, cleanWa: formattedWa };
   };
 
   const handleCheckout = async (e: React.FormEvent) => {
@@ -128,7 +143,7 @@ export default function CartPage() {
     const validated = validateCheckoutForm(formData.name, formData.phone);
     if (!validated) return;
 
-    if (!kodePos || !kota || !kecamatan || !detailJalan) {
+    if (!kodePos || !kota.trim() || !kecamatan.trim() || !kelurahan.trim() || !detailJalan.trim()) {
        alert("Mohon lengkapi seluruh kolom alamat pengiriman!");
        return;
     }
@@ -136,67 +151,35 @@ export default function CartPage() {
     setIsLoading(true);
 
     try {
-      const dateObj = new Date();
-      const orderNumber = `KUL-${String(dateObj.getFullYear()).slice(-2)}${String(dateObj.getMonth() + 1).padStart(2, '0')}${String(dateObj.getDate()).padStart(2, '0')}-${String(dateObj.getHours()).padStart(2, '0')}${String(dateObj.getMinutes()).padStart(2, '0')}${String(dateObj.getSeconds()).padStart(2, '0')}`;
-
-      const alamatLengkap = `${detailJalan.trim()}, Kel. ${kelurahan}, Kec. ${kecamatan}, ${kota}, ${kodePos}`;
-
-      const { error: dbError } = await supabase
-        .from('orders')
-        .insert({
-          order_number: orderNumber,
-          order_id: orderNumber,
-          customer_name: validated.cleanName,
-          customer_phone: validated.cleanWa,
-          shipping_address: alamatLengkap,
-          customer_address: alamatLengkap,
-          notes: formData.notes,
-          total_amount: totalAmount,
-          items: items,
-          status: 'unpaid'
-        });
-
-      if (dbError) throw new Error(dbError.message);
-
-      try {
-        await fetch('/api/telegram/notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            order_id: orderNumber,
-            customer_name: validated.cleanName,
-            total_amount: totalAmount,
-            items_detail: items.map(item => `- ${item.quantity}x ${item.name}`).join('\n')
-          })
-        });
-      } catch (tgError) {
-        console.error("Gagal mengirim Telegram", tgError);
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items.map((item) => ({ id: item.id, quantity: item.quantity })),
+          customer: {
+            name: validated.cleanName,
+            phone: validated.cleanWa,
+            notes: formData.notes.trim(),
+          },
+          address: {
+            postalCode: kodePos,
+            city: kota.trim(),
+            district: kecamatan.trim(),
+            village: kelurahan.trim(),
+            street: detailJalan.trim(),
+          },
+        }),
+      });
+      const result = (await response.json()) as CheckoutResponse | { error?: string };
+      if (!response.ok || !('whatsappUrl' in result)) {
+        throw new Error('error' in result && result.error ? result.error : 'Checkout gagal.');
       }
-
-      let adminPhone = "628889560447"; 
-      const { data: waData, error: waError } = await supabase
-        .from('store_settings')
-        .select('setting_value')
-        .eq('setting_key', 'admin_wa_number')
-        .single();
-        
-      if (waData && !waError && waData.setting_value) {
-         adminPhone = waData.setting_value; 
-      }
-
-      const orderDetails = items.map(item => `- ${item.quantity}x ${item.name} (Rp ${(item.price * item.quantity).toLocaleString('id-ID')})`).join('\n');
-      const notesSection = formData.notes.trim() !== '' ? `\n\n*Catatan Tambahan:*\n_${formData.notes}_` : '';
-
-      const message = `Halo Admin KulkasKuliner!\nSaya ingin memproses pesanan saya via *JALUR VIP*.\n\n*ORDER ID: ${orderNumber}*\n*Nama:* ${validated.cleanName}\n*No. WA:* ${validated.cleanWa}\n*Alamat Pengiriman:*\n${alamatLengkap}\n\n*Pesanan:*\n${orderDetails}\n\n*Total Belanja:* Rp ${totalAmount.toLocaleString('id-ID')}${notesSection}\n\nMohon infokan ongkos kirim Instan/Sameday beserta total transfer.\n\nTerima kasih.`;
-      
-      const waUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
 
       clearCart();
-      window.location.href = waUrl;
-
-    } catch (error: any) {
-      console.error("Kesalahan Transaksi Internal:", error.message);
-      alert('Gagal merekam pesanan ke sistem. Pastikan koneksi internet Anda stabil dan coba lagi.');
+      window.open(result.whatsappUrl, '_self');
+    } catch (error) {
+      console.error('Kesalahan checkout:', error);
+      alert(error instanceof Error ? error.message : 'Checkout gagal diproses.');
     } finally {
       setIsLoading(false);
     }
@@ -274,8 +257,8 @@ export default function CartPage() {
             <div className="bg-red-50 border border-red-200 p-3.5 rounded-lg mb-6 flex items-start gap-3">
               <span className="text-xl">🚀</span>
               <p className="text-[13px] text-red-900 font-medium leading-relaxed">
-                <strong className="font-bold block text-red-700">JALUR VIP & PRIORITAS!</strong>
-                Selesaikan order via sistem ini agar pesanan Anda langsung masuk ke layar kasir kami dan diproses tanpa harus antre menunggu balasan chat.
+                <strong className="font-bold block text-red-700">Pesanan cepat via WhatsApp</strong>
+                Sistem akan merekam pesanan, menyusun pesan otomatis, lalu mengarahkan Anda ke WhatsApp admin untuk konfirmasi ongkir dan pembayaran.
               </p>
             </div>
 
@@ -362,7 +345,7 @@ export default function CartPage() {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
                   </svg>
-                  Kirim Pesanan (Jalur VIP)
+                  Kirim Pesanan via WhatsApp
                 </>
               )}
             </button>
