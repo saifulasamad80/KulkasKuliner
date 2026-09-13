@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 type TelegramCallbackRequest = {
   callback_query?: {
@@ -14,12 +13,6 @@ type TelegramCallbackRequest = {
 };
 
 export const runtime = 'nodejs';
-
-function responseMessage(value: unknown) {
-  if (!value || typeof value !== 'object') return 'Perintah selesai.';
-  const result = value as Record<string, unknown>;
-  return typeof result.status === 'string' ? `Status: ${result.status}` : 'Perintah selesai.';
-}
 
 async function telegramCall(botToken: string, method: string, body: Record<string, unknown>) {
   const response = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
@@ -47,7 +40,6 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as TelegramCallbackRequest;
     const callbackQuery = body.callback_query;
-    const callbackData = callbackQuery?.data ?? '';
     const callbackId = callbackQuery?.id;
     const chatId = callbackQuery?.message?.chat?.id;
     const messageId = callbackQuery?.message?.message_id;
@@ -66,41 +58,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Konfigurasi Telegram belum lengkap.' }, { status: 503 });
     }
 
-    const match = /^(APPROVE|REJECT)_(KUL-\d{8}-[A-F0-9]{8})$/.exec(callbackData);
-    if (!match) {
-      await telegramCall(botToken, 'answerCallbackQuery', {
-        callback_query_id: callbackId,
-        text: 'Perintah tidak valid.',
-        show_alert: true,
-      });
-      return NextResponse.json({ error: 'Format callback tidak valid.' }, { status: 400 });
-    }
-
-    const [, action, orderId] = match;
-    const { data, error } = await getSupabaseAdmin().rpc('process_order_approval_secure', {
-      p_order_id: orderId,
-      p_action: action,
-    });
-
-    if (error) {
-      await telegramCall(botToken, 'answerCallbackQuery', {
-        callback_query_id: callbackId,
-        text: 'Order sudah diproses atau stok tidak mencukupi.',
-        show_alert: true,
-      });
-      return NextResponse.json({ error: 'Order tidak dapat diproses.' }, { status: 409 });
-    }
-
-    const message = responseMessage(data);
     await telegramCall(botToken, 'answerCallbackQuery', {
       callback_query_id: callbackId,
-      text: message,
+      text: 'Approval dilakukan dari dashboard admin.',
       show_alert: true,
     });
     await telegramCall(botToken, 'editMessageText', {
       chat_id: chatId,
       message_id: messageId,
-      text: `${callbackQuery.message?.text ?? `Order ${orderId}`}\n\nSTATUS FINAL: ${message}`,
+      text: `${callbackQuery.message?.text ?? 'Pesanan baru'}\n\nApproval dipindahkan ke dashboard admin. Buka /admin untuk memverifikasi pembayaran.`,
       reply_markup: { inline_keyboard: [] },
     });
 

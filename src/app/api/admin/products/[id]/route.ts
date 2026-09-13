@@ -9,6 +9,9 @@ type ProductPatch = {
   image_url?: string;
   description?: string;
   is_active?: boolean;
+  menu_id?: string | null;
+  variant_name?: string | null;
+  menu_name?: string | null;
 };
 
 function validatePatch(input: unknown): ProductPatch | null {
@@ -40,6 +43,18 @@ function validatePatch(input: unknown): ProductPatch | null {
     if (typeof value.is_active !== 'boolean') return null;
     patch.is_active = value.is_active;
   }
+  if ('menu_id' in value) {
+    if (value.menu_id !== null && (typeof value.menu_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(value.menu_id))) return null;
+    patch.menu_id = value.menu_id === null ? null : value.menu_id.trim();
+  }
+  if ('variant_name' in value) {
+    if (value.variant_name !== null && (typeof value.variant_name !== 'string' || value.variant_name.trim().length > 120)) return null;
+    patch.variant_name = value.variant_name === null ? null : value.variant_name.trim();
+  }
+  if ('menu_name' in value) {
+    if (value.menu_name !== null && (typeof value.menu_name !== 'string' || value.menu_name.trim().length < 2 || value.menu_name.trim().length > 120)) return null;
+    patch.menu_name = value.menu_name === null ? null : value.menu_name.trim();
+  }
 
   return Object.keys(patch).length > 0 ? patch : null;
 }
@@ -61,11 +76,24 @@ export async function PATCH(
   }
 
   try {
-    const { data, error } = await getSupabaseAdmin()
+    const admin = getSupabaseAdmin();
+    let productPatch = patch;
+    if (patch.menu_name !== undefined) {
+      let menuId: string | null = null;
+      if (patch.menu_name) {
+        const { data: menu, error: menuError } = await admin.from('menus').upsert({ name: patch.menu_name, is_active: true }, { onConflict: 'name' }).select('id').single();
+        if (menuError) throw menuError;
+        menuId = menu.id;
+      }
+      const rest = { ...patch };
+      delete rest.menu_name;
+      productPatch = { ...rest, menu_id: menuId };
+    }
+    const { data, error } = await admin
       .from('products')
-      .update(patch)
+      .update(productPatch)
       .eq('id', id)
-      .select('id, name, price, stock, image_url, is_active, description')
+      .select('id, name, price, stock, image_url, is_active, description, menu_id, variant_name')
       .single();
 
     if (error) throw error;

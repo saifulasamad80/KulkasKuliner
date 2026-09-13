@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'node:crypto';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { sendNewOrderPush } from '@/lib/push';
 import type { CheckoutResponse, OrderSnapshotItem } from '@/lib/types';
 
 type CheckoutItemInput = {
@@ -111,7 +112,6 @@ async function getStoreSetting(key: string) {
     .select('setting_value')
     .eq('setting_key', key)
     .maybeSingle();
-
   if (error) throw error;
   return typeof data?.setting_value === 'string' ? data.setting_value.trim() : '';
 }
@@ -122,41 +122,42 @@ async function sendTelegramNotification(order: CreatedOrder, customerName: strin
   if (!botToken || !chatId) return false;
 
   const itemsDetail = order.items
-    .map((item) => `- ${item.quantity}x ${item.name} (Rp ${(item.price * item.quantity).toLocaleString('id-ID')})`)
+    .map((item) => `- ${item.quantity}x ${item.menu_name || item.name}${item.variant_name ? ` (${item.variant_name})` : ''} (Rp ${(item.price * item.quantity).toLocaleString('id-ID')})`)
     .join('\n');
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: [
-        'PESANAN BARU MASUK',
-        '',
-        `Order ID: ${order.order_number}`,
-        `Nama: ${customerName}`,
-        `Total: Rp ${Number(order.total_amount).toLocaleString('id-ID')}`,
-        '',
-        'Detail:',
-        itemsDetail,
-        '',
-        'Gunakan tombol di bawah setelah verifikasi pembayaran.',
-      ].join('\n'),
-      reply_markup: {
-        inline_keyboard: [[
-          { text: 'APPROVE (Potong Stok)', callback_data: `APPROVE_${order.order_number}` },
-          { text: 'REJECT (Batalkan)', callback_data: `REJECT_${order.order_number}` },
-        ]],
-      },
-    }),
-  });
 
-  if (!response.ok) {
-    console.error('Notifikasi Telegram ditolak:', response.status);
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5_000),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: [
+          'PESANAN BARU MASUK',
+          '',
+          `Order ID: ${order.order_number}`,
+          `Nama: ${customerName}`,
+          `Total: Rp ${Number(order.total_amount).toLocaleString('id-ID')}`,
+          '',
+          'Detail:',
+          itemsDetail,
+          '',
+          'Buka dashboard admin untuk memverifikasi pembayaran.',
+        ].join('\n'),
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('Notifikasi Telegram ditolak:', response.status);
+      return false;
+    }
+
+    const result = (await response.json()) as { ok?: boolean };
+    return result.ok === true;
+  } catch (error) {
+    console.error('Notifikasi Telegram gagal:', error);
     return false;
   }
-
-  const result = (await response.json()) as { ok?: boolean };
-  return result.ok === true;
 }
 
 export async function POST(request: Request) {
@@ -167,8 +168,7 @@ export async function POST(request: Request) {
     }
 
     const admin = getSupabaseAdmin();
-    const configuredPhone =
-      (await getStoreSetting('admin_wa_number')) || process.env.ADMIN_WHATSAPP_NUMBER || '';
+    const configuredPhone = await getStoreSetting('admin_wa_number');
     const adminPhone = normalizeAdminPhone(configuredPhone);
     if (!adminPhone) {
       return NextResponse.json({ error: 'Nomor WhatsApp toko belum dikonfigurasi.' }, { status: 503 });
@@ -201,7 +201,7 @@ export async function POST(request: Request) {
     }
 
     const orderDetails = order.items
-      .map((item) => `- ${item.quantity}x ${item.name} (Rp ${(item.price * item.quantity).toLocaleString('id-ID')})`)
+      .map((item) => `- ${item.quantity}x ${item.menu_name || item.name}${item.variant_name ? ` (${item.variant_name})` : ''} (Rp ${(item.price * item.quantity).toLocaleString('id-ID')})`)
       .join('\n');
     const notesSection = body.customer.notes
       ? `\n\n*Catatan Tambahan:*\n${body.customer.notes}`
@@ -227,7 +227,10 @@ export async function POST(request: Request) {
       'Terima kasih.',
     ].join('\n');
     const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
-    const notificationSent = await sendTelegramNotification(order, body.customer.name);
+    const [notificationSent] = await Promise.all([
+      sendNewOrderPush(order.order_number, Number(order.total_amount)),
+      sendTelegramNotification(order, body.customer.name),
+    ]);
     const response: CheckoutResponse = {
       orderNumber: order.order_number,
       totalAmount: Number(order.total_amount),

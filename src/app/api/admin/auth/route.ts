@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'PIN tidak valid.' }, { status: 401 });
     }
 
-    return setAdminSessionCookie(NextResponse.json({ authenticated: true }));
+    return setAdminSessionCookie(NextResponse.json({ authenticated: true }), pin);
   } catch (error) {
     console.error('Admin login gagal:', error);
     return NextResponse.json({ error: 'Login admin gagal diproses.' }, { status: 500 });

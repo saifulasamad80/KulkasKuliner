@@ -1,7 +1,7 @@
 "use client";
 
 import { useCartStore } from '@/store/useCartStore';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import type { CheckoutResponse } from '@/lib/types';
 
@@ -17,6 +17,7 @@ export default function CartPage() {
   } = useCartStore();
 
   const [isLoading, setIsLoading] = useState(false);
+  const checkoutInFlightRef = useRef(false);
   const [syncingStock, setSyncingStock] = useState(true);
   
   const [formData, setFormData] = useState({
@@ -140,6 +141,8 @@ export default function CartPage() {
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (checkoutInFlightRef.current) return;
+
     const validated = validateCheckoutForm(formData.name, formData.phone);
     if (!validated) return;
 
@@ -149,6 +152,7 @@ export default function CartPage() {
     }
 
     setIsLoading(true);
+    checkoutInFlightRef.current = true;
 
     try {
       const response = await fetch('/api/orders', {
@@ -181,6 +185,7 @@ export default function CartPage() {
       console.error('Kesalahan checkout:', error);
       alert(error instanceof Error ? error.message : 'Checkout gagal diproses.');
     } finally {
+      checkoutInFlightRef.current = false;
       setIsLoading(false);
     }
   };
@@ -224,7 +229,8 @@ export default function CartPage() {
           {items.map((item) => (
             <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900">{item.name}</h3>
+                <h3 className="font-semibold text-gray-900">{item.menuName || item.name}</h3>
+                {item.variantName && <p className="text-xs text-gray-500 mt-0.5">Varian: {item.variantName}</p>}
                 <p className="text-red-600 font-bold mt-1">Rp {item.price.toLocaleString('id-ID')}</p>
               </div>
               <div className="flex items-center gap-3">

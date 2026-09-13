@@ -17,19 +17,23 @@ function sign(payload: string) {
   return createHmac('sha256', getSessionSecret()).update(payload).digest('base64url');
 }
 
+function pinFingerprint(pin: string) {
+  return createHmac('sha256', getSessionSecret()).update(`pin:${pin}`).digest('base64url');
+}
+
 function safeEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-export function createAdminSessionValue() {
+export function createAdminSessionValue(pin: string) {
   const expiresAt = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
-  const payload = `admin:${expiresAt}`;
+  const payload = `admin:${expiresAt}:${pinFingerprint(pin)}`;
   return `${payload}.${sign(payload)}`;
 }
 
-export function isValidAdminSessionValue(value: string | undefined) {
+export function isValidAdminSessionValue(value: string | undefined, expectedPin?: string) {
   if (!value) return false;
 
   const separator = value.lastIndexOf('.');
@@ -37,9 +41,17 @@ export function isValidAdminSessionValue(value: string | undefined) {
 
   const payload = value.slice(0, separator);
   const signature = value.slice(separator + 1);
-  const expiresAt = Number(payload.split(':')[1]);
+  const payloadParts = payload.split(':');
+  const [, expiresAtValue, fingerprint] = payloadParts;
+  const expiresAt = Number(expiresAtValue);
 
-  if (!payload.startsWith('admin:') || !Number.isSafeInteger(expiresAt)) {
+  if (
+    payloadParts.length !== 3 ||
+    !payload.startsWith('admin:') ||
+    !Number.isSafeInteger(expiresAt) ||
+    !fingerprint ||
+    (expectedPin !== undefined && !safeEqual(fingerprint, pinFingerprint(expectedPin)))
+  ) {
     return false;
   }
 
@@ -48,7 +60,17 @@ export function isValidAdminSessionValue(value: string | undefined) {
 
 export async function hasAdminSession() {
   const cookieStore = await cookies();
-  return isValidAdminSessionValue(cookieStore.get(COOKIE_NAME)?.value);
+  const sessionValue = cookieStore.get(COOKIE_NAME)?.value;
+  if (!sessionValue || !isValidAdminSessionValue(sessionValue)) return false;
+
+  const { data, error } = await getSupabaseAdmin()
+    .from('store_settings')
+    .select('setting_value')
+    .eq('setting_key', 'admin_secret_pin')
+    .maybeSingle();
+
+  const expectedPin = typeof data?.setting_value === 'string' ? data.setting_value.trim() : '';
+  return !error && expectedPin.length > 0 && isValidAdminSessionValue(sessionValue, expectedPin);
 }
 
 export async function verifyAdminPin(pin: string) {
@@ -62,17 +84,12 @@ export async function verifyAdminPin(pin: string) {
     throw new Error('PIN admin tidak dapat diverifikasi.');
   }
 
-  // Database remains the primary source; the env fallback keeps the previous
-  // ADMIN_PASSWORD deployment compatible during the migration.
-  const expectedPin =
-    typeof data?.setting_value === 'string' && data.setting_value.length > 0
-      ? data.setting_value
-      : process.env.ADMIN_PASSWORD?.trim() || '';
+  const expectedPin = typeof data?.setting_value === 'string' ? data.setting_value.trim() : '';
   return expectedPin.length > 0 && safeEqual(pin, expectedPin);
 }
 
-export function setAdminSessionCookie(response: Response) {
-  const cookieValue = createAdminSessionValue();
+export function setAdminSessionCookie(response: Response, pin: string) {
+  const cookieValue = createAdminSessionValue(pin);
   const headers = new Headers(response.headers);
   headers.append(
     'Set-Cookie',

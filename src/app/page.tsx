@@ -7,11 +7,25 @@ import type { Product } from '@/lib/types';
 export const revalidate = 60;
 
 export default async function Home() {
-  const { data: products, error } = await supabase
+  const groupedResult = await supabase
     .from('products')
-    .select('id, name, price, stock, image_url, is_active, description')
+    .select('id, name, price, stock, image_url, is_active, description, menu_id, variant_name, menus(id, name, description, image_url, is_active)')
     .eq('is_active', true) 
     .order('name', { ascending: true });
+  let products: Product[] = (groupedResult.data ?? []) as unknown as Product[];
+  let error = groupedResult.error;
+
+  // Migration katalog dijalankan terpisah dari deploy aplikasi. Selama schema
+  // belum punya menus, katalog legacy tetap harus bisa dirender.
+  if (error) {
+    const legacyResult = await supabase
+      .from('products')
+      .select('id, name, price, stock, image_url, is_active, description')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+    products = (legacyResult.data ?? []) as Product[];
+    error = legacyResult.error;
+  }
 
   if (error) {
     console.error("Gagal menarik data produk:", error);

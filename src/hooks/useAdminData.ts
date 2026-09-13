@@ -5,7 +5,7 @@ export type OrderItem = {
   id: string;
   quantity: number;
   price_at_time: number;
-  products?: { name: string } | null;
+  products?: { name: string; variant_name?: string | null } | null;
 };
 
 export type Order = {
@@ -34,6 +34,9 @@ type ProductInput = {
   stock: number;
   image_url: string;
   description: string;
+  menu_id?: string | null;
+  variant_name?: string | null;
+  menu_name?: string | null;
 };
 
 async function readError(response: Response) {
@@ -73,8 +76,15 @@ export function useAdminData(enabled: boolean) {
     };
 
     void load();
+    const refreshInterval = window.setInterval(() => {
+      void fetchData().catch((error: unknown) => {
+        if (active) console.error('Refresh data admin gagal:', error);
+      });
+    }, 15_000);
+
     return () => {
       active = false;
+      window.clearInterval(refreshInterval);
     };
   }, [enabled, fetchData]);
 
@@ -99,7 +109,12 @@ export function useAdminData(enabled: boolean) {
   };
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
-    if (!confirm(`Yakin ubah status jadi ${newStatus.toUpperCase()}?`)) return;
+    const confirmation = newStatus === 'paid'
+      ? 'Yakin pembayaran sudah diverifikasi? Pesanan diterima dan stok akan dikurangi secara atomik.'
+      : newStatus === 'canceled'
+        ? 'Yakin menolak pesanan ini? Stok tidak akan dikurangi.'
+        : `Yakin ubah status jadi ${newStatus.toUpperCase()}?`;
+    if (!confirm(confirmation)) return;
 
     const response = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
       method: 'PATCH',
