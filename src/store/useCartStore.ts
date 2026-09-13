@@ -9,7 +9,7 @@ interface CartState {
   decreaseQty: (id: string) => void;
   removeItem: (id: string) => void;
   clearCart: () => void;
-  updateItemStock: (id: string, stock: number, name?: string) => void;
+  updateItemStock: (id: string, stock: number, name?: string, variantName?: string) => void;
   decreaseItemToMaxStock: (id: string, maxStock: number) => void;
 }
 
@@ -77,11 +77,16 @@ export const useCartStore = create<CartState>()(
 
       clearCart: () => set({ items: [] }),
 
-      updateItemStock: (id, stock, name) => {
+      updateItemStock: (id, stock, name, variantName) => {
         set({
           items: get().items.map((item) =>
             item.id === id
-              ? { ...item, stock, ...(name ? { name } : {}) }
+              ? {
+                  ...item,
+                  stock,
+                  ...(name ? { name, menuName: name } : {}),
+                  ...(variantName !== undefined ? { variantName } : {}),
+                }
               : item
           ),
         });

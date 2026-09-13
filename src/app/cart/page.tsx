@@ -53,22 +53,31 @@ export default function CartPage() {
         });
         if (!response.ok) throw new Error('Stok tidak dapat disinkronkan.');
         const result = (await response.json()) as {
-          products?: Array<{ id: string; stock: number; name: string }>;
+          products?: Array<{
+            id: string;
+            stock: number;
+            name: string;
+            variant_name?: string | null;
+            menus?: { name?: string | null } | Array<{ name?: string | null }> | null;
+          }>;
         };
 
         result.products?.forEach(dbItem => {
           const cartItem = currentItems.find(ci => ci.id === dbItem.id);
           
           if (cartItem) {
+            const menu = Array.isArray(dbItem.menus) ? dbItem.menus[0] : dbItem.menus;
+            const latestName = dbItem.name || menu?.name || cartItem.name;
+            const latestVariantName = dbItem.variant_name || undefined;
             if (dbItem.stock === 0) {
                removeItem(cartItem.id);
                alert(`Maaf, ${dbItem.name} baru saja habis dibeli orang lain dan telah dihapus dari keranjang Anda.`);
             } else if (cartItem.quantity > dbItem.stock) {
-               updateItemStock(cartItem.id, dbItem.stock, dbItem.name);
+               updateItemStock(cartItem.id, dbItem.stock, latestName, latestVariantName);
                decreaseItemToMaxStock(cartItem.id, dbItem.stock);
                alert(`Stok ${dbItem.name} menurun. Kuantitas pesanan Anda disesuaikan menjadi sisa stok (${dbItem.stock}).`);
             } else {
-              updateItemStock(cartItem.id, dbItem.stock, dbItem.name);
+              updateItemStock(cartItem.id, dbItem.stock, latestName, latestVariantName);
             }
           }
         });
@@ -229,7 +238,7 @@ export default function CartPage() {
           {items.map((item) => (
             <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900">{item.menuName || item.name}</h3>
+                <h3 className="font-semibold text-gray-900">{item.name}</h3>
                 {item.variantName && <p className="text-xs text-gray-500 mt-0.5">Varian: {item.variantName}</p>}
                 <p className="text-red-600 font-bold mt-1">Rp {item.price.toLocaleString('id-ID')}</p>
               </div>

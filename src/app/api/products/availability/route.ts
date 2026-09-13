@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   try {
     const { data, error } = await getSupabaseAdmin()
       .from('products')
-      .select('id, stock, name, price, is_active, menu_id, variant_name')
+      .select('id, stock, name, price, is_active, menu_id, variant_name, menus(name)')
       .in('id', ids);
 
     if (error) throw error;

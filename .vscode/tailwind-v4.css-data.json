@@ -1,0 +1,37 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@theme",
+      "description": "Mendefinisikan design tokens Tailwind CSS v4 sebagai CSS variables."
+    },
+    {
+      "name": "@source",
+      "description": "Mendaftarkan source files yang dipindai Tailwind CSS v4."
+    },
+    {
+      "name": "@utility",
+      "description": "Mendefinisikan custom utility Tailwind CSS v4."
+    },
+    {
+      "name": "@variant",
+      "description": "Menerapkan variant Tailwind CSS ke sekumpulan style."
+    },
+    {
+      "name": "@custom-variant",
+      "description": "Mendefinisikan custom variant Tailwind CSS v4."
+    },
+    {
+      "name": "@plugin",
+      "description": "Memuat plugin JavaScript Tailwind CSS."
+    },
+    {
+      "name": "@config",
+      "description": "Memuat konfigurasi JavaScript Tailwind CSS versi lama."
+    },
+    {
+      "name": "@reference",
+      "description": "Mereferensikan stylesheet Tailwind tanpa menduplikasi output CSS."
+    }
+  ]
+}
