@@ -30,7 +30,9 @@ export const metadata: Metadata = {
     siteName: "KulkasKuliner",
     images: [
       {
-        url: "https://kulkaskuliner.vercel.app/kulkul.jpeg",
+        // WhatsApp lebih konsisten membaca gambar Open Graph landscape 1.91:1.
+        // Query version memaksa crawler mengambil preview baru, bukan cache lama.
+        url: "/og-image.jpg?v=2",
         width: 1200,
         height: 630,
         alt: "Katalog KulkasKuliner",
@@ -43,7 +45,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "KulkasKuliner Jakarta Timur",
     description: "Sedia aneka Frozen Food premium. Siap antar Instan!",
-    images: ["https://kulkaskuliner.vercel.app/kulkul.jpeg"],
+    images: ["/og-image.jpg?v=2"],
   },
 };
 
