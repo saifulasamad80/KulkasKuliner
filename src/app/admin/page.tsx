@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAdminData } from '@/hooks/useAdminData';
 import AdminPushSettings from '@/components/AdminPushSettings';
+import WhatsAppAdGenerator from '@/components/WhatsAppAdGenerator';
 
 function getCustomerWhatsAppUrl(phone: string, orderNumber: string) {
   const normalized = phone.replace(/\D/g, '').replace(/^0/, '62');
@@ -272,6 +273,8 @@ export default function AdminDashboard() {
           <button onClick={handleLogout} className="bg-red-100 text-red-700 border border-red-300 px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-red-200 transition-colors shadow-sm text-center">Kunci Keluar</button>
         </div>
       </div>
+
+      <WhatsAppAdGenerator products={products} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
