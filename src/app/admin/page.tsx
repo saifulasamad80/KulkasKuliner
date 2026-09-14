@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAdminData } from '@/hooks/useAdminData';
 import AdminPushSettings from '@/components/AdminPushSettings';
 import WhatsAppAdGenerator from '@/components/WhatsAppAdGenerator';
+import SocialContentGenerator from '@/components/SocialContentGenerator';
 
 function getCustomerWhatsAppUrl(phone: string, orderNumber: string) {
   const normalized = phone.replace(/\D/g, '').replace(/^0/, '62');
@@ -275,6 +276,7 @@ export default function AdminDashboard() {
       </div>
 
       <WhatsAppAdGenerator products={products} />
+      <SocialContentGenerator products={products} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
