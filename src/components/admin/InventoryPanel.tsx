@@ -106,7 +106,7 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
   };
 
   return (
-    <div className="lg:col-span-5 bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit">
+    <div id="inventori" className="scroll-mt-6 lg:col-span-5 bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit">
       <div className="flex justify-between items-center mb-5 border-b pb-2">
         <h2 className="text-xl font-bold text-gray-800">Manajemen Inventori</h2>
         <button

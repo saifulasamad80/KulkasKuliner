@@ -4,6 +4,7 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useAdminData } from '@/hooks/useAdminData';
 import AdminLoginScreen from '@/components/admin/AdminLoginScreen';
 import AdminHeader from '@/components/admin/AdminHeader';
+import AdminSummaryCards from '@/components/admin/AdminSummaryCards';
 import InventoryPanel from '@/components/admin/InventoryPanel';
 import OrdersPanel from '@/components/admin/OrdersPanel';
 import WhatsAppAdGenerator from '@/components/WhatsAppAdGenerator';
@@ -38,8 +39,11 @@ export default function AdminDashboard() {
   return (
     <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-50">
       <AdminHeader totalRevenue={totalRevenue} onLogout={logout} />
+      <AdminSummaryCards products={products} orders={orders} />
 
-      <WhatsAppAdGenerator products={products} />
+      <div id="iklan" className="scroll-mt-6">
+        <WhatsAppAdGenerator products={products} />
+      </div>
       <SocialContentGenerator products={products} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
