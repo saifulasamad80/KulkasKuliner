@@ -28,7 +28,7 @@ type AdminDataResponse = {
   totalRevenue: number;
 };
 
-type ProductInput = {
+export type ProductInput = {
   name: string;
   price: number;
   stock: number;
