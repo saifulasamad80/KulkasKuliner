@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 const COOKIE_NAME = 'kulkas_admin_session';
@@ -58,62 +59,71 @@ export function isValidAdminSessionValue(value: string | undefined, expectedPin?
   return expiresAt > Math.floor(Date.now() / 1000) && safeEqual(signature, sign(payload));
 }
 
+async function readExpectedAdminPin() {
+  const { data, error } = await getSupabaseAdmin()
+    .from('store_settings')
+    .select('setting_value')
+    .eq('setting_key', 'admin_secret_pin')
+    .maybeSingle();
+
+  const expectedPin = typeof data?.setting_value === 'string' ? data.setting_value.trim() : '';
+  return { expectedPin, error };
+}
+
 export async function hasAdminSession() {
   const cookieStore = await cookies();
   const sessionValue = cookieStore.get(COOKIE_NAME)?.value;
   if (!sessionValue || !isValidAdminSessionValue(sessionValue)) return false;
 
-  const { data, error } = await getSupabaseAdmin()
-    .from('store_settings')
-    .select('setting_value')
-    .eq('setting_key', 'admin_secret_pin')
-    .maybeSingle();
-
-  const expectedPin = typeof data?.setting_value === 'string' ? data.setting_value.trim() : '';
+  const { expectedPin, error } = await readExpectedAdminPin();
   return !error && expectedPin.length > 0 && isValidAdminSessionValue(sessionValue, expectedPin);
 }
 
 export async function verifyAdminPin(pin: string) {
-  const { data, error } = await getSupabaseAdmin()
-    .from('store_settings')
-    .select('setting_value')
-    .eq('setting_key', 'admin_secret_pin')
-    .maybeSingle();
-
+  const { expectedPin, error } = await readExpectedAdminPin();
   if (error) {
     throw new Error('PIN admin tidak dapat diverifikasi.');
   }
 
-  const expectedPin = typeof data?.setting_value === 'string' ? data.setting_value.trim() : '';
   return expectedPin.length > 0 && safeEqual(pin, expectedPin);
 }
 
-export function setAdminSessionCookie(response: Response, pin: string) {
-  const cookieValue = createAdminSessionValue(pin);
+function withSessionCookie(response: Response, value: string, maxAgeSeconds: number) {
   const headers = new Headers(response.headers);
   headers.append(
     'Set-Cookie',
-    `${COOKIE_NAME}=${cookieValue}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; SameSite=Strict${
+    `${COOKIE_NAME}=${value}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; SameSite=Strict${
       process.env.NODE_ENV === 'production' ? '; Secure' : ''
     }`
   );
   return new Response(response.body, { status: response.status, headers });
 }
 
+export function setAdminSessionCookie(response: Response, pin: string) {
+  return withSessionCookie(response, createAdminSessionValue(pin), SESSION_TTL_SECONDS);
+}
+
 export function clearAdminSessionCookie(response: Response) {
-  const headers = new Headers(response.headers);
-  headers.append(
-    'Set-Cookie',
-    `${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict${
-      process.env.NODE_ENV === 'production' ? '; Secure' : ''
-    }`
-  );
-  return new Response(response.body, { status: response.status, headers });
+  return withSessionCookie(response, '', 0);
 }
 
 export function isSameOrigin(request: Request) {
   const origin = request.headers.get('origin');
   return !origin || origin === new URL(request.url).origin;
+}
+
+/**
+ * Guard clause for admin API routes: returns a 403 JSON Response when the
+ * request lacks a valid admin session or fails the same-origin check, or
+ * `null` when the request is allowed to proceed.
+ *
+ * Usage: `const denied = await requireAdmin(request); if (denied) return denied;`
+ */
+export async function requireAdmin(request: Request): Promise<NextResponse | null> {
+  if (!(await hasAdminSession()) || !isSameOrigin(request)) {
+    return NextResponse.json({ error: 'Tidak diizinkan.' }, { status: 403 });
+  }
+  return null;
 }
 
 export { COOKIE_NAME };

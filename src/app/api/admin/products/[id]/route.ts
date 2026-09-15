@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
-import { hasAdminSession, isSameOrigin } from '@/lib/admin-session';
+import { requireAdmin } from '@/lib/admin-session';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import {
+  MENU_ID_PATTERN,
+  normalizeBoundedText,
+  normalizeNullableText,
+  validateNonNegativeInteger,
+  validatePositiveInteger,
+  validateRequiredText,
+} from '@/lib/product-validation';
 
 type ProductPatch = {
   name?: string;
@@ -20,40 +28,48 @@ function validatePatch(input: unknown): ProductPatch | null {
   const patch: ProductPatch = {};
 
   if ('name' in value) {
-    if (typeof value.name !== 'string' || value.name.trim().length < 2 || value.name.trim().length > 120) return null;
-    patch.name = value.name.trim();
+    const name = validateRequiredText(value.name, 2, 120);
+    if (!name.valid) return null;
+    patch.name = name.value;
   }
   if ('price' in value) {
-    if (!Number.isInteger(Number(value.price)) || Number(value.price) <= 0) return null;
-    patch.price = Number(value.price);
+    const price = validatePositiveInteger(value.price);
+    if (!price.valid) return null;
+    patch.price = price.value;
   }
   if ('stock' in value) {
-    if (!Number.isInteger(Number(value.stock)) || Number(value.stock) < 0) return null;
-    patch.stock = Number(value.stock);
+    const stock = validateNonNegativeInteger(value.stock);
+    if (!stock.valid) return null;
+    patch.stock = stock.value;
   }
   if ('image_url' in value) {
-    if (typeof value.image_url !== 'string' || value.image_url.trim().length > 2_000) return null;
-    patch.image_url = value.image_url.trim();
+    const imageUrl = normalizeBoundedText(value.image_url, { max: 2_000, requireString: true });
+    if (!imageUrl.valid) return null;
+    patch.image_url = imageUrl.value;
   }
   if ('description' in value) {
-    if (typeof value.description !== 'string' || value.description.trim().length > 500) return null;
-    patch.description = value.description.trim();
+    const description = normalizeBoundedText(value.description, { max: 500, requireString: true });
+    if (!description.valid) return null;
+    patch.description = description.value;
   }
   if ('is_active' in value) {
     if (typeof value.is_active !== 'boolean') return null;
     patch.is_active = value.is_active;
   }
   if ('menu_id' in value) {
-    if (value.menu_id !== null && (typeof value.menu_id !== 'string' || !/^[0-9a-f-]{36}$/i.test(value.menu_id))) return null;
-    patch.menu_id = value.menu_id === null ? null : value.menu_id.trim();
+    const menuId = normalizeNullableText(value.menu_id, { pattern: MENU_ID_PATTERN });
+    if (!menuId.valid) return null;
+    patch.menu_id = menuId.value;
   }
   if ('variant_name' in value) {
-    if (value.variant_name !== null && (typeof value.variant_name !== 'string' || value.variant_name.trim().length > 120)) return null;
-    patch.variant_name = value.variant_name === null ? null : value.variant_name.trim();
+    const variantName = normalizeNullableText(value.variant_name, { max: 120 });
+    if (!variantName.valid) return null;
+    patch.variant_name = variantName.value;
   }
   if ('menu_name' in value) {
-    if (value.menu_name !== null && (typeof value.menu_name !== 'string' || value.menu_name.trim().length < 2 || value.menu_name.trim().length > 120)) return null;
-    patch.menu_name = value.menu_name === null ? null : value.menu_name.trim();
+    const menuName = normalizeNullableText(value.menu_name, { min: 2, max: 120 });
+    if (!menuName.valid) return null;
+    patch.menu_name = menuName.value;
   }
 
   return Object.keys(patch).length > 0 ? patch : null;
@@ -65,9 +81,8 @@ export async function PATCH(
   request: Request,
   context: RouteContext<'/api/admin/products/[id]'>
 ) {
-  if (!(await hasAdminSession()) || !isSameOrigin(request)) {
-    return NextResponse.json({ error: 'Tidak diizinkan.' }, { status: 403 });
-  }
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
 
   const { id } = await context.params;
   const patch = validatePatch(await request.json());

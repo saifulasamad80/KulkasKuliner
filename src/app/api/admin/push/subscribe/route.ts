@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { hasAdminSession, isSameOrigin } from '@/lib/admin-session';
+import { requireAdmin } from '@/lib/admin-session';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 type SubscriptionBody = {
@@ -35,7 +35,8 @@ function parseSubscription(value: unknown): SubscriptionBody | null {
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-  if (!(await hasAdminSession()) || !isSameOrigin(request)) return NextResponse.json({ error: 'Tidak diizinkan.' }, { status: 403 });
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
   const subscription = parseSubscription(await request.json());
   if (!subscription) return NextResponse.json({ error: 'Subscription push tidak valid.' }, { status: 400 });
   const { error } = await getSupabaseAdmin().from('push_subscriptions').upsert({
@@ -53,7 +54,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!(await hasAdminSession()) || !isSameOrigin(request)) return NextResponse.json({ error: 'Tidak diizinkan.' }, { status: 403 });
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
   const subscription = parseSubscription(await request.json());
   if (!subscription) return NextResponse.json({ error: 'Subscription push tidak valid.' }, { status: 400 });
   const { error } = await getSupabaseAdmin().from('push_subscriptions').delete().eq('endpoint', subscription.endpoint);

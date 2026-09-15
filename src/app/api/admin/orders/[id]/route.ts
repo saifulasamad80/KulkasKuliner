@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { hasAdminSession, isSameOrigin } from '@/lib/admin-session';
+import { requireAdmin } from '@/lib/admin-session';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 const allowedStatuses = new Set(['paid', 'canceled', 'completed']);
@@ -10,9 +10,8 @@ export async function PATCH(
   request: Request,
   context: RouteContext<'/api/admin/orders/[id]'>
 ) {
-  if (!(await hasAdminSession()) || !isSameOrigin(request)) {
-    return NextResponse.json({ error: 'Tidak diizinkan.' }, { status: 403 });
-  }
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
 
   const { id } = await context.params;
   const body = await request.json();

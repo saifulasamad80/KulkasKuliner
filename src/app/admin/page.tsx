@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAdminData } from '@/hooks/useAdminData';
+import { deleteMenuImage, useProductForm } from '@/hooks/useProductForm';
 import AdminPushSettings from '@/components/AdminPushSettings';
 import WhatsAppAdGenerator from '@/components/WhatsAppAdGenerator';
 import SocialContentGenerator from '@/components/SocialContentGenerator';
@@ -34,47 +35,13 @@ export default function AdminDashboard() {
   const pendingOrderCount = orders.filter((order) => order.status === 'unpaid').length;
 
   const [isAdding, setIsAdding] = useState(false);
-
-  const [newProduct, setNewProduct] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', menu_id: null as string | null, menu_name: '', variant_name: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', price: 0, stock: 0, image_url: '', description: '', menu_id: null as string | null, menu_name: '', variant_name: '' });
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [newPendingImageUrl, setNewPendingImageUrl] = useState<string | null>(null);
-  const [editPendingImageUrl, setEditPendingImageUrl] = useState<string | null>(null);
-  const [editOriginalImageUrl, setEditOriginalImageUrl] = useState('');
 
-  const deleteMenuImage = async (url: string) => {
-    if (!url || !url.includes('/storage/v1/object/public/menu-images/')) return;
-    const response = await fetch('/api/admin/uploads/menu-image', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-    if (!response.ok && response.status !== 409) {
-      const result = (await response.json().catch(() => null)) as { error?: string } | null;
-      console.error(result?.error || 'Cleanup foto menu gagal.');
-    }
-  };
+  const newForm = useProductForm();
+  const editForm = useProductForm();
 
-  const changeNewImageUrl = (url: string) => {
-    const pendingUrl = newPendingImageUrl;
-    setNewProduct((current) => ({ ...current, image_url: url }));
-    if (pendingUrl && pendingUrl !== url) {
-      setNewPendingImageUrl(null);
-      void deleteMenuImage(pendingUrl);
-    }
-  };
-
-  const changeEditImageUrl = (url: string) => {
-    const pendingUrl = editPendingImageUrl;
-    setEditForm((current) => ({ ...current, image_url: url }));
-    if (pendingUrl && pendingUrl !== url) {
-      setEditPendingImageUrl(null);
-      void deleteMenuImage(pendingUrl);
-    }
-  };
-
-  const uploadImage = async (file: File, target: 'new' | 'edit') => {
+  const uploadProductImage = async (file: File, form: ReturnType<typeof useProductForm>) => {
     setUploadingImage(true);
     try {
       const formData = new FormData();
@@ -82,17 +49,7 @@ export default function AdminDashboard() {
       const response = await fetch('/api/admin/uploads/menu-image', { method: 'POST', body: formData });
       const result = (await response.json()) as { url?: string; error?: string };
       if (!response.ok || !result.url) throw new Error(result.error || 'Foto gagal diunggah.');
-      if (target === 'new') {
-        const previousPendingUrl = newPendingImageUrl;
-        setNewProduct((current) => ({ ...current, image_url: result.url as string }));
-        setNewPendingImageUrl(result.url);
-        if (previousPendingUrl && previousPendingUrl !== result.url) void deleteMenuImage(previousPendingUrl);
-      } else {
-        const previousPendingUrl = editPendingImageUrl;
-        setEditForm((current) => ({ ...current, image_url: result.url as string }));
-        setEditPendingImageUrl(result.url);
-        if (previousPendingUrl && previousPendingUrl !== result.url) void deleteMenuImage(previousPendingUrl);
-      }
+      form.applyUploadedUrl(result.url);
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Foto gagal diunggah.');
     } finally {
@@ -101,29 +58,13 @@ export default function AdminDashboard() {
   };
 
   const cancelNewProduct = async () => {
-    if (newPendingImageUrl) await deleteMenuImage(newPendingImageUrl);
-    setNewPendingImageUrl(null);
-    setNewProduct({ name: '', price: 0, stock: 0, image_url: '', description: '', menu_id: null, menu_name: '', variant_name: '' });
+    await newForm.discardPendingImage();
     setIsAdding(false);
   };
 
   const cancelEditProduct = async () => {
-    if (editPendingImageUrl) await deleteMenuImage(editPendingImageUrl);
-    setEditPendingImageUrl(null);
-    setEditOriginalImageUrl('');
+    await editForm.discardPendingImage();
     setEditingId(null);
-  };
-
-  const removeFormImage = async (target: 'new' | 'edit') => {
-    if (target === 'new') {
-      if (newPendingImageUrl) await deleteMenuImage(newPendingImageUrl);
-      setNewPendingImageUrl(null);
-      setNewProduct((current) => ({ ...current, image_url: '' }));
-      return;
-    }
-    if (editPendingImageUrl) await deleteMenuImage(editPendingImageUrl);
-    setEditPendingImageUrl(null);
-    setEditForm((current) => ({ ...current, image_url: '' }));
   };
 
   useEffect(() => {
@@ -177,13 +118,12 @@ export default function AdminDashboard() {
 
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProduct.name || newProduct.price <= 0) return alert("Nama dan Harga wajib diisi valid!");
+    if (!newForm.value.name || newForm.value.price <= 0) return alert("Nama dan Harga wajib diisi valid!");
     try {
-      await createProduct(newProduct);
+      await createProduct(newForm.value);
       alert("Produk ditambah!");
-      setNewPendingImageUrl(null);
+      newForm.reset();
       setIsAdding(false);
-      setNewProduct({ name: '', price: 0, stock: 0, image_url: '', description: '', menu_id: null, menu_name: '', variant_name: '' });
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Produk gagal disimpan.');
     }
@@ -192,26 +132,17 @@ export default function AdminDashboard() {
   const saveEditProduct = async (id: string) => {
     try {
       await updateProduct(id, {
-        name: editForm.name,
-        price: editForm.price,
-        stock: editForm.stock,
-        image_url: editForm.image_url,
-        description: editForm.description,
-        menu_id: editForm.menu_id,
-        variant_name: editForm.variant_name || null,
-        menu_name: editForm.menu_name || null,
+        name: editForm.value.name,
+        price: editForm.value.price,
+        stock: editForm.value.stock,
+        image_url: editForm.value.image_url,
+        description: editForm.value.description,
+        menu_id: editForm.value.menu_id,
+        variant_name: editForm.value.variant_name || null,
+        menu_name: editForm.value.menu_name || null,
       });
-      const obsoleteImageUrl = editOriginalImageUrl && editOriginalImageUrl !== editForm.image_url
-        ? editOriginalImageUrl
-        : '';
-      const unusedPendingImageUrl = editPendingImageUrl && editPendingImageUrl !== editForm.image_url
-        ? editPendingImageUrl
-        : '';
-      setEditPendingImageUrl(null);
-      setEditOriginalImageUrl('');
       setEditingId(null);
-      if (obsoleteImageUrl) await deleteMenuImage(obsoleteImageUrl);
-      if (unusedPendingImageUrl) await deleteMenuImage(unusedPendingImageUrl);
+      await editForm.cleanUpAfterSave();
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Produk gagal diperbarui.');
     }
@@ -294,44 +225,44 @@ export default function AdminDashboard() {
             <form onSubmit={handleAddProduct} className="mb-6 bg-green-50 p-4 border border-green-200 rounded-lg space-y-3 shadow-inner">
               <input type="text" placeholder="Nama Produk" required
                 className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow"
-                value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})}
+                value={newForm.value.name} onChange={e => newForm.setField('name', e.target.value)}
               />
               <input type="text" placeholder="Nama varian (opsional, contoh: Pedas)"
                 className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none"
-                value={newProduct.variant_name} onChange={e => setNewProduct({...newProduct, variant_name: e.target.value})}
+                value={newForm.value.variant_name} onChange={e => newForm.setField('variant_name', e.target.value)}
               />
               <input type="text" placeholder="Nama menu induk (untuk mengelompokkan varian)"
                 className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none"
-                value={newProduct.menu_name} onChange={e => setNewProduct({...newProduct, menu_name: e.target.value})}
+                value={newForm.value.menu_name} onChange={e => newForm.setField('menu_name', e.target.value)}
               />
               <div className="relative">
                 <textarea placeholder="Deskripsi Produk (Maksimal 90 huruf biar gak kepotong)" rows={2} maxLength={90}
                   className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow pr-12"
-                  value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})}
+                  value={newForm.value.description} onChange={e => newForm.setField('description', e.target.value)}
                 />
-                <span className={`absolute bottom-3 right-3 text-[10px] font-black ${newProduct.description?.length >= 90 ? 'text-red-600 animate-pulse' : 'text-gray-400'}`}>
-                  {newProduct.description?.length || 0}/90
+                <span className={`absolute bottom-3 right-3 text-[10px] font-black ${newForm.value.description.length >= 90 ? 'text-red-600 animate-pulse' : 'text-gray-400'}`}>
+                  {newForm.value.description.length}/90
                 </span>
               </div>
               <div className="flex gap-2">
                 <input type="number" placeholder="Harga (Rp)" required min="1"
                   className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow"
-                  value={newProduct.price || ''} onChange={e => setNewProduct({...newProduct, price: parseInt(e.target.value)})}
+                  value={newForm.value.price || ''} onChange={e => newForm.setField('price', parseInt(e.target.value))}
                 />
                 <input type="number" placeholder="Stok Gudang" required min="0"
                   className="w-1/2 p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow"
-                  value={newProduct.stock || ''} onChange={e => setNewProduct({...newProduct, stock: parseInt(e.target.value)})}
+                  value={newForm.value.stock || ''} onChange={e => newForm.setField('stock', parseInt(e.target.value))}
                 />
               </div>
               <label className="block text-xs font-bold text-gray-600">Foto menu (JPG/PNG/WebP, maks. 5 MB)
-                <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingImage} onChange={e => { const file = e.target.files?.[0]; if (file) void uploadImage(file, 'new'); }} className="mt-1 w-full p-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900" />
+                <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingImage} onChange={e => { const file = e.target.files?.[0]; if (file) void uploadProductImage(file, newForm); }} className="mt-1 w-full p-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900" />
               </label>
               <input type="url" placeholder="URL foto hasil upload"
                 className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 outline-none transition-shadow"
-                value={newProduct.image_url} onChange={e => changeNewImageUrl(e.target.value)}
+                value={newForm.value.image_url} onChange={e => newForm.changeImageUrl(e.target.value)}
               />
-              {newProduct.image_url && (
-                <button type="button" disabled={uploadingImage} onClick={() => void removeFormImage('new')} className="w-full border border-red-200 bg-white text-red-600 font-bold py-2 rounded-lg text-xs hover:bg-red-50 disabled:opacity-50">Hapus Foto dari Form</button>
+              {newForm.value.image_url && (
+                <button type="button" disabled={uploadingImage} onClick={() => void newForm.removeImage()} className="w-full border border-red-200 bg-white text-red-600 font-bold py-2 rounded-lg text-xs hover:bg-red-50 disabled:opacity-50">Hapus Foto dari Form</button>
               )}
               <button type="submit" className="w-full bg-green-600 text-white font-bold py-2.5 rounded-lg text-sm hover:bg-green-700 transition-colors shadow-sm">Simpan Produk Baru</button>
             </form>
@@ -346,44 +277,44 @@ export default function AdminDashboard() {
                   <div className="space-y-2 bg-blue-50/50 p-2 -mx-2 rounded-lg border border-blue-100">
                     <input type="text" placeholder="Nama Produk"
                       className="w-full p-2 border border-gray-300 rounded text-sm font-bold bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                      value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})}
+                      value={editForm.value.name} onChange={e => editForm.setField('name', e.target.value)}
                     />
                     <input type="text" placeholder="Nama varian"
                       className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                      value={editForm.variant_name} onChange={e => setEditForm({...editForm, variant_name: e.target.value})}
+                      value={editForm.value.variant_name} onChange={e => editForm.setField('variant_name', e.target.value)}
                     />
                     <input type="text" placeholder="Nama menu induk"
                       className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                      value={editForm.menu_name} onChange={e => setEditForm({...editForm, menu_name: e.target.value})}
+                      value={editForm.value.menu_name} onChange={e => editForm.setField('menu_name', e.target.value)}
                     />
                     <div className="relative">
                       <textarea placeholder="Deskripsi (Maksimal 90 huruf)" rows={2} maxLength={90}
                         className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none pr-12"
-                        value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})}
+                        value={editForm.value.description} onChange={e => editForm.setField('description', e.target.value)}
                       />
-                      <span className={`absolute bottom-3 right-3 text-[10px] font-black ${editForm.description?.length >= 90 ? 'text-red-600 animate-pulse' : 'text-gray-400'}`}>
-                        {editForm.description?.length || 0}/90
+                      <span className={`absolute bottom-3 right-3 text-[10px] font-black ${editForm.value.description.length >= 90 ? 'text-red-600 animate-pulse' : 'text-gray-400'}`}>
+                        {editForm.value.description.length}/90
                       </span>
                     </div>
                     <div className="flex gap-2">
                       <input type="number" placeholder="Harga"
                         className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={editForm.price} onChange={e => setEditForm({...editForm, price: parseInt(e.target.value)})}
+                        value={editForm.value.price} onChange={e => editForm.setField('price', parseInt(e.target.value))}
                       />
                       <input type="number" placeholder="Stok"
                         className="w-1/2 p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={editForm.stock} onChange={e => setEditForm({...editForm, stock: parseInt(e.target.value)})}
+                        value={editForm.value.stock} onChange={e => editForm.setField('stock', parseInt(e.target.value))}
                       />
                     </div>
                     <label className="block text-xs font-bold text-gray-600">Ganti foto
-                      <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingImage} onChange={e => { const file = e.target.files?.[0]; if (file) void uploadImage(file, 'edit'); }} className="mt-1 w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900" />
+                      <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingImage} onChange={e => { const file = e.target.files?.[0]; if (file) void uploadProductImage(file, editForm); }} className="mt-1 w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900" />
                     </label>
                     <input type="text" placeholder="URL Foto"
                       className="w-full p-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                      value={editForm.image_url} onChange={e => changeEditImageUrl(e.target.value)}
+                      value={editForm.value.image_url} onChange={e => editForm.changeImageUrl(e.target.value)}
                     />
-                      {editForm.image_url && (
-                        <button type="button" disabled={uploadingImage} onClick={() => void removeFormImage('edit')} className="w-full border border-red-200 bg-white text-red-600 font-bold py-2 rounded-lg text-xs hover:bg-red-50 disabled:opacity-50">Hapus Foto</button>
+                      {editForm.value.image_url && (
+                        <button type="button" disabled={uploadingImage} onClick={() => void editForm.removeImage()} className="w-full border border-red-200 bg-white text-red-600 font-bold py-2 rounded-lg text-xs hover:bg-red-50 disabled:opacity-50">Hapus Foto</button>
                       )}
                     <div className="flex gap-2 mt-3">
                         <button disabled={uploadingImage} onClick={() => void saveEditProduct(prod.id)} className="bg-blue-600 text-white px-3 py-2 text-xs font-bold rounded-lg flex-1 hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50">Simpan Perubahan</button>
@@ -412,19 +343,17 @@ export default function AdminDashboard() {
                     <div className="flex gap-3 pt-3 mt-1 border-t border-gray-100">
                       <button
                         onClick={() => {
-                          if (editingId && editingId !== prod.id && editPendingImageUrl) void deleteMenuImage(editPendingImageUrl);
+                          if (editingId && editingId !== prod.id && editForm.pendingImageUrl) void deleteMenuImage(editForm.pendingImageUrl);
                           setEditingId(prod.id);
-                          setEditPendingImageUrl(null);
-                          setEditOriginalImageUrl(prod.image_url || '');
-                          setEditForm({
+                          editForm.load({
                             name: prod.name,
                             price: prod.price,
                             stock: prod.stock,
                             image_url: prod.image_url || '',
-                            description: prod.description || ''
-                            , menu_id: prod.menu_id || null
-                            , menu_name: Array.isArray(prod.menus) ? prod.menus[0]?.name || '' : prod.menus?.name || ''
-                            , variant_name: prod.variant_name || ''
+                            description: prod.description || '',
+                            menu_id: prod.menu_id || null,
+                            menu_name: Array.isArray(prod.menus) ? prod.menus[0]?.name || '' : prod.menus?.name || '',
+                            variant_name: prod.variant_name || '',
                           });
                         }}
                         className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"

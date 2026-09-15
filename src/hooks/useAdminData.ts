@@ -44,6 +44,16 @@ async function readError(response: Response) {
   return body?.error || 'Permintaan gagal diproses.';
 }
 
+/** POST/PATCH `url` with a JSON body, throwing the server's error message on failure. */
+async function requestJson(url: string, method: 'POST' | 'PATCH', body: unknown) {
+  const response = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
 export function useAdminData(enabled: boolean) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -89,22 +99,12 @@ export function useAdminData(enabled: boolean) {
   }, [enabled, fetchData]);
 
   const createProduct = async (input: ProductInput) => {
-    const response = await fetch('/api/admin/products', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    if (!response.ok) throw new Error(await readError(response));
+    await requestJson('/api/admin/products', 'POST', input);
     await fetchData();
   };
 
   const updateProduct = async (id: string, input: ProductInput) => {
-    const response = await fetch(`/api/admin/products/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    if (!response.ok) throw new Error(await readError(response));
+    await requestJson(`/api/admin/products/${encodeURIComponent(id)}`, 'PATCH', input);
     await fetchData();
   };
 
@@ -116,12 +116,7 @@ export function useAdminData(enabled: boolean) {
         : `Yakin ubah status jadi ${newStatus.toUpperCase()}?`;
     if (!confirm(confirmation)) return;
 
-    const response = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    });
-    if (!response.ok) throw new Error(await readError(response));
+    await requestJson(`/api/admin/orders/${encodeURIComponent(orderId)}`, 'PATCH', { status: newStatus });
     await fetchData();
     if (newStatus === 'canceled') alert('Pesanan dibatalkan.');
   };
@@ -130,12 +125,7 @@ export function useAdminData(enabled: boolean) {
     const action = currentStatus ? 'Arsipkan (Sembunyikan dari Publik)' : 'Aktifkan (Tampilkan ke Publik)';
     if (!confirm(`Yakin ingin ${action} produk ini?`)) return;
 
-    const response = await fetch(`/api/admin/products/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_active: !currentStatus }),
-    });
-    if (!response.ok) throw new Error(await readError(response));
+    await requestJson(`/api/admin/products/${encodeURIComponent(id)}`, 'PATCH', { is_active: !currentStatus });
     await fetchData();
   };
 

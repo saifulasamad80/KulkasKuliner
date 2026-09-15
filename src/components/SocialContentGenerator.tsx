@@ -2,39 +2,19 @@
 
 import { useState } from "react";
 import type { Product } from "@/lib/types";
+import {
+  getAvailableProducts,
+  getCatalogUrl,
+  getJakartaTimeContext,
+  getProductLabel,
+  getTimeGreeting as getGreeting,
+  selectRotatingProducts,
+  type TimeContext,
+} from "@/lib/marketing";
 
 type SocialContentGeneratorProps = { products: Product[] };
 type ContentMode = "carousel" | "video";
-type TimeContext = { hour: number; dayName: string; dayOfMonth: number };
 type AudienceMoment = { mindset: string; hook: string; urgency: string; cta: string };
-
-const JAKARTA_TIME_ZONE = "Asia/Jakarta";
-
-function getJakartaTimeContext(date: Date): TimeContext {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: JAKARTA_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const hour = Number(values.hour === "24" ? "0" : values.hour);
-
-  return {
-    hour,
-    dayName: new Intl.DateTimeFormat("id-ID", { timeZone: JAKARTA_TIME_ZONE, weekday: "long" }).format(date),
-    dayOfMonth: Number(values.day),
-  };
-}
-
-function getGreeting(hour: number) {
-  if (hour >= 4 && hour < 11) return "Selamat pagi";
-  if (hour >= 11 && hour < 15) return "Selamat siang";
-  if (hour >= 15 && hour < 19) return "Selamat sore";
-  return "Selamat malam";
-}
 
 function getAudienceMoment(hour: number, dayName: string): AudienceMoment {
   if (hour >= 4 && hour < 11) {
@@ -69,14 +49,6 @@ function getAudienceMoment(hour: number, dayName: string): AudienceMoment {
   };
 }
 
-function getProductLabel(product: Product) {
-  return `${product.name}${product.variant_name ? ` ${product.variant_name}` : ""}`.trim();
-}
-
-function getAvailableProducts(products: Product[]) {
-  return products.filter((product) => product.is_active && product.stock > 0);
-}
-
 function selectProducts(products: Product[], generation: number, onlyWithImages = false) {
   const availableProducts = getAvailableProducts(products);
   const candidates = onlyWithImages
@@ -85,9 +57,7 @@ function selectProducts(products: Product[], generation: number, onlyWithImages 
   const now = new Date();
   const rotationSeed = now.getMinutes() + now.getHours() + generation * 3;
 
-  return Array.from({ length: Math.min(3, candidates.length) }, (_, index) => {
-    return candidates[(rotationSeed + index) % candidates.length];
-  }).filter((product): product is Product => Boolean(product));
+  return selectRotatingProducts(candidates, rotationSeed);
 }
 
 function getStockFomo(products: Product[]) {
@@ -113,8 +83,7 @@ function createSocialContent(products: Product[], generation: number, mode: Cont
   const fallbackProducts = selectedProducts.length > 0 ? selectedProducts : selectProducts(products, generation);
   const productNames = fallbackProducts.length > 0 ? fallbackProducts.map(getProductLabel).join(" dan ") : "menu frozen food yang tersedia";
   const stockFomo = getStockFomo(products);
-  const siteOrigin = typeof window === "undefined" ? "https://kulkaskuliner.vercel.app" : window.location.origin;
-  const catalogUrl = `${siteOrigin}/#katalog`;
+  const catalogUrl = getCatalogUrl();
   const { caption, story } = createCommonCopy(context, audienceMoment, productNames, stockFomo, catalogUrl);
 
   if (mode === "carousel") {

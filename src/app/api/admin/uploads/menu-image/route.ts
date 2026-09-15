@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
-import { hasAdminSession, isSameOrigin } from '@/lib/admin-session';
+import { requireAdmin } from '@/lib/admin-session';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 const allowedTypes = new Map([
@@ -13,7 +13,8 @@ const MAX_SIZE = 5 * 1024 * 1024;
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-  if (!(await hasAdminSession()) || !isSameOrigin(request)) return NextResponse.json({ error: 'Tidak diizinkan.' }, { status: 403 });
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
   try {
     const formData = await request.formData();
     const file = formData.get('file');
@@ -39,7 +40,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!(await hasAdminSession()) || !isSameOrigin(request)) return NextResponse.json({ error: 'Tidak diizinkan.' }, { status: 403 });
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
   const body = (await request.json().catch(() => null)) as { url?: unknown } | null;
   if (typeof body?.url !== 'string') return NextResponse.json({ error: 'URL foto tidak valid.' }, { status: 400 });
 

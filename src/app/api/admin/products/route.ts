@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
-import { hasAdminSession, isSameOrigin } from '@/lib/admin-session';
+import { requireAdmin } from '@/lib/admin-session';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import {
+  MENU_ID_PATTERN,
+  normalizeBoundedText,
+  normalizeNullableText,
+  validateNonNegativeInteger,
+  validatePositiveInteger,
+  validateRequiredText,
+} from '@/lib/product-validation';
 
 type ProductInput = {
   name: string;
@@ -16,41 +24,37 @@ type ProductInput = {
 function validateProduct(input: unknown): ProductInput | null {
   if (!input || typeof input !== 'object') return null;
   const value = input as Record<string, unknown>;
-  const name = typeof value.name === 'string' ? value.name.trim() : '';
-  const imageUrl = typeof value.image_url === 'string' ? value.image_url.trim() : '';
-  const description = typeof value.description === 'string' ? value.description.trim() : '';
-  const menuId = value.menu_id === null || value.menu_id === undefined || typeof value.menu_id === 'string' ? (typeof value.menu_id === 'string' ? value.menu_id.trim() : null) : '__invalid__';
-  const variantName = value.variant_name === null || value.variant_name === undefined || typeof value.variant_name === 'string' ? (typeof value.variant_name === 'string' ? value.variant_name.trim() : null) : '__invalid__';
-  const menuName = value.menu_name === null || value.menu_name === undefined || typeof value.menu_name === 'string' ? (typeof value.menu_name === 'string' ? value.menu_name.trim() : null) : '__invalid__';
-  const price = Number(value.price);
-  const stock = Number(value.stock);
 
-  if (
-    name.length < 2 ||
-    name.length > 120 ||
-    !Number.isInteger(price) ||
-    price <= 0 ||
-    !Number.isInteger(stock) ||
-    stock < 0 ||
-    imageUrl.length > 2_000 ||
-    description.length > 500
-    || menuId === '__invalid__' || variantName === '__invalid__'
-    || (menuId !== null && !/^[0-9a-f-]{36}$/i.test(menuId))
-    || (variantName !== null && (variantName.length < 1 || variantName.length > 120))
-    || menuName === '__invalid__' || (menuName !== null && (menuName.length < 2 || menuName.length > 120))
-  ) {
+  const name = validateRequiredText(value.name, 2, 120);
+  const price = validatePositiveInteger(value.price);
+  const stock = validateNonNegativeInteger(value.stock);
+  const imageUrl = normalizeBoundedText(value.image_url, { max: 2_000 });
+  const description = normalizeBoundedText(value.description, { max: 500 });
+  const menuId = normalizeNullableText(value.menu_id, { pattern: MENU_ID_PATTERN });
+  const variantName = normalizeNullableText(value.variant_name, { min: 1, max: 120 });
+  const menuName = normalizeNullableText(value.menu_name, { min: 2, max: 120 });
+
+  if (!name.valid || !price.valid || !stock.valid || !imageUrl.valid || !description.valid || !menuId.valid || !variantName.valid || !menuName.valid) {
     return null;
   }
 
-  return { name, price, stock, image_url: imageUrl, description, menu_id: menuId, variant_name: variantName, menu_name: menuName };
+  return {
+    name: name.value,
+    price: price.value,
+    stock: stock.value,
+    image_url: imageUrl.value,
+    description: description.value,
+    menu_id: menuId.value,
+    variant_name: variantName.value,
+    menu_name: menuName.value,
+  };
 }
 
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-  if (!(await hasAdminSession()) || !isSameOrigin(request)) {
-    return NextResponse.json({ error: 'Tidak diizinkan.' }, { status: 403 });
-  }
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
 
   try {
     const input = validateProduct(await request.json());

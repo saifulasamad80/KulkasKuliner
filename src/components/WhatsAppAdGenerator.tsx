@@ -2,48 +2,18 @@
 
 import { useState } from "react";
 import type { Product } from "@/lib/types";
+import {
+  getAvailableProducts,
+  getCatalogUrl,
+  getJakartaTimeContext,
+  getProductLabel,
+  getTimeGreeting,
+  selectRotatingProducts,
+} from "@/lib/marketing";
 
 type WhatsAppAdGeneratorProps = {
   products: Product[];
 };
-
-type TimeContext = {
-  hour: number;
-  dayName: string;
-  dayOfMonth: number;
-};
-
-const JAKARTA_TIME_ZONE = "Asia/Jakarta";
-
-function getJakartaTimeContext(date: Date): TimeContext {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: JAKARTA_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
-
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const hour = Number(values.hour === "24" ? "0" : values.hour);
-
-  return {
-    hour,
-    dayName: new Intl.DateTimeFormat("id-ID", {
-      timeZone: JAKARTA_TIME_ZONE,
-      weekday: "long",
-    }).format(date),
-    dayOfMonth: Number(values.day),
-  };
-}
-
-function getTimeGreeting(hour: number) {
-  if (hour >= 4 && hour < 11) return "Selamat pagi";
-  if (hour >= 11 && hour < 15) return "Selamat siang";
-  if (hour >= 15 && hour < 19) return "Selamat sore";
-  return "Selamat malam";
-}
 
 function getAudienceMoment(hour: number, dayName: string) {
   if (hour >= 4 && hour < 11) {
@@ -77,10 +47,6 @@ function getAudienceMoment(hour: number, dayName: string) {
   };
 }
 
-function getProductLabel(product: Product) {
-  return `${product.name}${product.variant_name ? ` ${product.variant_name}` : ""}`.trim();
-}
-
 function formatProductLine(product: Product) {
   return `• ${getProductLabel(product)} — Rp ${Number(product.price).toLocaleString("id-ID")}`;
 }
@@ -88,17 +54,13 @@ function formatProductLine(product: Product) {
 function createAdvertisement(products: Product[], generation: number) {
   const now = new Date();
   const context = getJakartaTimeContext(now);
-  const availableProducts = products.filter((product) => product.is_active && product.stock > 0);
+  const availableProducts = getAvailableProducts(products);
   const lowStockProducts = availableProducts.filter((product) => product.stock <= 5);
   const rotationSeed = context.hour + now.getMinutes() + context.dayOfMonth + generation * 3;
-  const availableCount = Math.min(3, availableProducts.length);
-  const featuredProducts = Array.from({ length: availableCount }, (_, index) => {
-    return availableProducts[(rotationSeed + index) % availableProducts.length];
-  });
+  const featuredProducts = selectRotatingProducts(availableProducts, rotationSeed);
   const greeting = getTimeGreeting(context.hour);
   const audienceMoment = getAudienceMoment(context.hour, context.dayName);
-  const siteOrigin = typeof window === "undefined" ? "https://kulkaskuliner.vercel.app" : window.location.origin;
-  const siteUrl = `${siteOrigin}/#katalog`;
+  const siteUrl = getCatalogUrl();
 
   const openings = [
     audienceMoment.headline,
@@ -146,8 +108,9 @@ export default function WhatsAppAdGenerator({ products }: WhatsAppAdGeneratorPro
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const availableCount = products.filter((product) => product.is_active && product.stock > 0).length;
-  const lowStockCount = products.filter((product) => product.is_active && product.stock > 0 && product.stock <= 5).length;
+  const availableProducts = getAvailableProducts(products);
+  const availableCount = availableProducts.length;
+  const lowStockCount = availableProducts.filter((product) => product.stock <= 5).length;
 
   const generateNewAd = () => {
     setCopied(false);
