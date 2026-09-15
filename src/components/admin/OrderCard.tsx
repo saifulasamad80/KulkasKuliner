@@ -96,6 +96,9 @@ export default function OrderCard({ order, onUpdateStatus }: OrderCardProps) {
             {order.status === 'unpaid' && (
               <button onClick={() => onUpdateStatus('canceled')} className="bg-white text-red-600 border border-red-200 px-4 py-1.5 rounded text-xs font-bold hover:bg-red-50 transition-colors shadow-sm focus:ring-2 focus:ring-red-400 outline-none">Tolak Pesanan</button>
             )}
+            {order.status === 'paid' && (
+              <button onClick={() => onUpdateStatus('unpaid')} className="bg-white text-amber-700 border border-amber-300 px-4 py-1.5 rounded text-xs font-bold hover:bg-amber-50 transition-colors shadow-sm focus:ring-2 focus:ring-amber-400 outline-none">↩ Batalkan Verifikasi (Kembali ke Belum Bayar)</button>
+            )}
           </div>
         </div>
       </div>

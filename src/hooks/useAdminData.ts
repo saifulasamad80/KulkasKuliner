@@ -113,12 +113,15 @@ export function useAdminData(enabled: boolean) {
       ? 'Yakin pembayaran sudah diverifikasi? Pesanan diterima dan stok akan dikurangi secara atomik.'
       : newStatus === 'canceled'
         ? 'Yakin menolak pesanan ini? Stok tidak akan dikurangi.'
-        : `Yakin ubah status jadi ${newStatus.toUpperCase()}?`;
+        : newStatus === 'unpaid'
+          ? 'Yakin batalkan verifikasi pembayaran? Status kembali ke Belum Bayar dan stok yang sudah dipotong akan dikembalikan.'
+          : `Yakin ubah status jadi ${newStatus.toUpperCase()}?`;
     if (!confirm(confirmation)) return;
 
     await requestJson(`/api/admin/orders/${encodeURIComponent(orderId)}`, 'PATCH', { status: newStatus });
     await fetchData();
     if (newStatus === 'canceled') alert('Pesanan dibatalkan.');
+    if (newStatus === 'unpaid') alert('Verifikasi pembayaran dibatalkan, stok dikembalikan.');
   };
 
   const toggleProductActive = async (id: string, currentStatus: boolean) => {

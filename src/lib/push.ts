@@ -43,7 +43,12 @@ export function getVapidPublicKey() {
 
 export async function sendNewOrderPush(orderNumber: string, totalAmount: number) {
   try {
-    if (!configureVapid()) return false;
+    if (!configureVapid()) {
+      console.warn(
+        'Notifikasi push dilewati: VAPID belum dikonfigurasi (NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT).'
+      );
+      return false;
+    }
 
     const { data, error } = await getSupabaseAdmin()
       .from('push_subscriptions')
@@ -55,7 +60,10 @@ export async function sendNewOrderPush(orderNumber: string, totalAmount: number)
     }
 
     const subscriptions = (data ?? []) as PushSubscriptionRow[];
-    if (subscriptions.length === 0) return false;
+    if (subscriptions.length === 0) {
+      console.warn('Notifikasi push dilewati: belum ada admin yang mengaktifkan notifikasi (0 subscription tersimpan).');
+      return false;
+    }
 
     const payload = JSON.stringify({
       title: 'Pesanan baru masuk',
@@ -64,6 +72,7 @@ export async function sendNewOrderPush(orderNumber: string, totalAmount: number)
     });
 
     let delivered = false;
+    let failed = 0;
     await Promise.all(
       subscriptions.map(async (subscription) => {
         try {
@@ -79,6 +88,7 @@ export async function sendNewOrderPush(orderNumber: string, totalAmount: number)
           );
           delivered = true;
         } catch (error) {
+          failed += 1;
           const statusCode = (error as { statusCode?: number }).statusCode;
           if (statusCode === 404 || statusCode === 410) {
             await getSupabaseAdmin().from('push_subscriptions').delete().eq('id', subscription.id);
@@ -89,6 +99,9 @@ export async function sendNewOrderPush(orderNumber: string, totalAmount: number)
       })
     );
 
+    console.log(
+      `Notifikasi push: ${subscriptions.length - failed}/${subscriptions.length} perangkat admin terkirim untuk pesanan ${orderNumber}.`
+    );
     return delivered;
   } catch (error) {
     console.error('Notifikasi Web Push gagal diproses:', error);

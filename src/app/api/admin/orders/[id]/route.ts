@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-session';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
-const allowedStatuses = new Set(['paid', 'canceled', 'completed']);
+const allowedStatuses = new Set(['paid', 'canceled', 'completed', 'unpaid']);
 
 export const runtime = 'nodejs';
 
@@ -25,10 +25,11 @@ export async function PATCH(
     const admin = getSupabaseAdmin();
     let resultMessage: unknown = null;
 
-    if (status === 'paid' || status === 'canceled') {
+    if (status === 'paid' || status === 'canceled' || status === 'unpaid') {
+      const action = status === 'paid' ? 'APPROVE' : status === 'canceled' ? 'REJECT' : 'REVERT_TO_UNPAID';
       const { data, error } = await admin.rpc('process_order_approval_secure', {
         p_order_id: id,
-        p_action: status === 'paid' ? 'APPROVE' : 'REJECT',
+        p_action: action,
       });
       if (error) throw error;
       resultMessage = data;
@@ -41,8 +42,11 @@ export async function PATCH(
     return NextResponse.json({ result: resultMessage });
   } catch (error) {
     console.error('Status pesanan gagal diperbarui:', error);
+    const message = error && typeof error === 'object' && 'message' in error
+      ? String((error as { message: unknown }).message).trim()
+      : '';
     return NextResponse.json(
-      { error: 'Status pesanan gagal diperbarui. Stok mungkin tidak mencukupi.' },
+      { error: message || 'Status pesanan gagal diperbarui.' },
       { status: 409 }
     );
   }
