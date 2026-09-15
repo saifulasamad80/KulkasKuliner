@@ -6,5 +6,5 @@ export const runtime = 'nodejs';
 export async function GET() {
   const publicKey = getVapidPublicKey();
   if (!publicKey) return NextResponse.json({ error: 'Web Push belum dikonfigurasi.' }, { status: 503 });
-  return NextResponse.json({ publicKey }, { headers: { 'Cache-Control': 'public, max-age=3600' } });
+  return NextResponse.json({ publicKey }, { headers: { 'Cache-Control': 'no-store' } });
 }

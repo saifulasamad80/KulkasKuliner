@@ -23,9 +23,9 @@ export default function OrdersPanel({ orders, updateOrderStatus }: OrdersPanelPr
   };
 
   return (
-    <div id="pembelian" className="scroll-mt-6 lg:col-span-7 space-y-5">
+    <div id="pembelian" className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <h2 className="text-xl font-bold text-gray-800">Antrean Pesanan Masuk</h2>
+        <h3 className="text-xl font-bold text-gray-800">Pembelian</h3>
         <span className="text-xs font-semibold text-gray-500">Dashboard diperbarui otomatis setiap 15 detik</span>
       </div>
       {pendingOrderCount > 0 && (

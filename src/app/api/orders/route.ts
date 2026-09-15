@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { randomBytes } from 'node:crypto';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
-import { sendNewOrderPush } from '@/lib/push';
+import { getVapidStatus, sendNewOrderPush } from '@/lib/push';
 import type { CheckoutResponse, OrderSnapshotItem } from '@/lib/types';
 
 type CheckoutItemInput = {
@@ -231,16 +231,16 @@ export async function POST(request: Request) {
       'Terima kasih.',
     ].join('\n');
     const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
-    const [notificationSent] = await Promise.all([
+    after(() => Promise.allSettled([
       sendNewOrderPush(order.order_number, Number(order.total_amount)),
       sendTelegramNotification(order, body.customer.name),
-    ]);
+    ]));
     const response: CheckoutResponse = {
       orderNumber: order.order_number,
       totalAmount: Number(order.total_amount),
       whatsappUrl,
       items: order.items,
-      notificationSent,
+      notificationSent: getVapidStatus().ready,
     };
 
     return NextResponse.json(response, { headers: { 'Cache-Control': 'no-store' } });

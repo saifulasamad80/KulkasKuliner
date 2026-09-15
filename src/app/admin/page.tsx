@@ -1,18 +1,16 @@
 "use client";
 
-import { useState } from 'react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useAdminData } from '@/hooks/useAdminData';
 import AdminLoginScreen from '@/components/admin/AdminLoginScreen';
 import AdminHeader from '@/components/admin/AdminHeader';
-import AdminSummaryCards, { type AdminDashboardTab } from '@/components/admin/AdminSummaryCards';
+import DashboardModule from '@/components/admin/DashboardModule';
 import InventoryPanel from '@/components/admin/InventoryPanel';
 import OrdersPanel from '@/components/admin/OrdersPanel';
 import WhatsAppAdGenerator from '@/components/WhatsAppAdGenerator';
 import SocialContentGenerator from '@/components/SocialContentGenerator';
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<AdminDashboardTab>('iklan');
   const { isAuthenticated, isCheckingAuth, isVerifying, pinInput, setPinInput, login, logout } = useAdminAuth();
   const {
     orders, products, totalRevenue, isLoading,
@@ -39,47 +37,32 @@ export default function AdminDashboard() {
   }
 
   return (
-    <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-50">
-      <AdminHeader totalRevenue={totalRevenue} onLogout={logout} />
-      <AdminSummaryCards
-        products={products}
-        orders={orders}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-      />
+    <main className="min-h-screen bg-slate-200">
+      <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
+        <div className="mb-6 rounded-2xl border border-white bg-white p-4 shadow-sm sm:p-6">
+          <AdminHeader totalRevenue={totalRevenue} onLogout={logout} />
+        </div>
 
-      <section
-        id="iklan-panel"
-        role="tabpanel"
-        aria-labelledby="iklan-tab"
-        hidden={activeTab !== 'iklan'}
-      >
-        <WhatsAppAdGenerator products={products} />
-        <SocialContentGenerator products={products} />
-      </section>
+        <DashboardModule title="Modul Pesanan">
+          <OrdersPanel orders={orders} updateOrderStatus={updateOrderStatus} />
+        </DashboardModule>
 
-      <section
-        id="pembelian-panel"
-        role="tabpanel"
-        aria-labelledby="pembelian-tab"
-        hidden={activeTab !== 'pembelian'}
-      >
-        <OrdersPanel orders={orders} updateOrderStatus={updateOrderStatus} />
-      </section>
+        <DashboardModule title="Modul Menu">
+          <InventoryPanel
+            products={products}
+            createProduct={createProduct}
+            updateProduct={updateProduct}
+            toggleProductActive={toggleProductActive}
+          />
+        </DashboardModule>
 
-      <section
-        id="menu-aktif-panel"
-        role="tabpanel"
-        aria-labelledby="menu-aktif-tab"
-        hidden={activeTab !== 'menu-aktif'}
-      >
-        <InventoryPanel
-          products={products}
-          createProduct={createProduct}
-          updateProduct={updateProduct}
-          toggleProductActive={toggleProductActive}
-        />
-      </section>
+        <DashboardModule title="Modul Iklan">
+          <div className="space-y-5">
+            <WhatsAppAdGenerator products={products} />
+            <SocialContentGenerator products={products} />
+          </div>
+        </DashboardModule>
+      </div>
     </main>
   );
 }

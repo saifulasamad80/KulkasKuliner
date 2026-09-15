@@ -106,9 +106,9 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
   };
 
   return (
-    <div id="inventori" className="scroll-mt-6 lg:col-span-5 bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit">
+    <div id="inventori" className="h-fit rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
       <div className="flex justify-between items-center mb-5 border-b pb-2">
-        <h2 className="text-xl font-bold text-gray-800">Manajemen Inventori</h2>
+        <h3 className="text-xl font-bold text-gray-800">Menu Aktif</h3>
         <button
           onClick={() => { if (isAdding) void cancelNewProduct(); else setIsAdding(true); }}
           disabled={uploadingImage}
