@@ -1,17 +1,20 @@
 diff --git a/src/app/admin/page.tsx b/src/app/admin/page.tsx
-index f179ad3..490e51f 100644
+index f179ad3..ba66038 100644
 --- a/src/app/admin/page.tsx
 +++ b/src/app/admin/page.tsx
-@@ -1,549 +1,55 @@
+@@ -1,550 +1,112 @@
  "use client";
  
 -import { useState, useEffect } from 'react';
 -import Link from 'next/link';
++import { useState } from 'react';
 +import { useAdminAuth } from '@/hooks/useAdminAuth';
  import { useAdminData } from '@/hooks/useAdminData';
 -import AdminPushSettings from '@/components/AdminPushSettings';
 +import AdminLoginScreen from '@/components/admin/AdminLoginScreen';
 +import AdminHeader from '@/components/admin/AdminHeader';
++import DashboardModule from '@/components/admin/DashboardModule';
++import DashboardModuleCard from '@/components/admin/DashboardModuleCard';
 +import InventoryPanel from '@/components/admin/InventoryPanel';
 +import OrdersPanel from '@/components/admin/OrdersPanel';
  import WhatsAppAdGenerator from '@/components/WhatsAppAdGenerator';
@@ -24,7 +27,8 @@ index f179ad3..490e51f 100644
 -  const message = `Halo, terkait pesanan ${orderNumber} di KulkasKuliner. Ada informasi mengenai produk/pesanan Anda.`;
 -  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 -}
--
++type ModuleKey = 'pesanan' | 'menu' | 'iklan';
+ 
  export default function AdminDashboard() {
 -  const [isAuthenticated, setIsAuthenticated] = useState(false);
 -  const [pinInput, setPinInput] = useState("");
@@ -37,6 +41,7 @@ index f179ad3..490e51f 100644
 -    createProduct, updateProduct, updateOrderStatus, toggleProductActive
 +    createProduct, updateProduct, updateOrderStatus, toggleProductActive,
    } = useAdminData(isAuthenticated);
++  const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
  
 -  const sortedOrders = [...orders].sort((left, right) => {
 -    if (left.status === 'unpaid' && right.status !== 'unpaid') return -1;
@@ -278,6 +283,9 @@ index f179ad3..490e51f 100644
 +  if (isLoading) {
 +    return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-xl text-gray-500">Memuat Data Dashboard...</div>;
 +  }
++
++  const pendingOrderCount = orders.filter((order) => order.status === 'unpaid').length;
++  const activeMenuCount = products.filter((product) => product.is_active).length;
  
    return (
      <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-50">
@@ -296,14 +304,38 @@ index f179ad3..490e51f 100644
 -          </div>
 -          <AdminPushSettings />
 -          <button onClick={handleLogout} className="bg-red-100 text-red-700 border border-red-300 px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-red-200 transition-colors shadow-sm text-center">Kunci Keluar</button>
--        </div>
--      </div>
 +      <AdminHeader totalRevenue={totalRevenue} onLogout={logout} />
- 
-       <WhatsAppAdGenerator products={products} />
-       <SocialContentGenerator products={products} />
- 
-       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
++
++      {activeModule === null ? (
++        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
++          <DashboardModuleCard
++            icon="🧾"
++            title="Modul Pesanan"
++            description={pendingOrderCount > 0 ? `${pendingOrderCount} pesanan menunggu verifikasi` : 'Tidak ada pesanan yang menunggu verifikasi'}
++            accentClassName="bg-blue-100 text-blue-700"
++            onClick={() => setActiveModule('pesanan')}
++          />
++          <DashboardModuleCard
++            icon="🍱"
++            title="Modul Menu"
++            description={`${activeMenuCount} menu aktif dari ${products.length} total produk`}
++            accentClassName="bg-green-100 text-green-700"
++            onClick={() => setActiveModule('menu')}
++          />
++          <DashboardModuleCard
++            icon="📢"
++            title="Modul Iklan"
++            description="Generator konten promosi WhatsApp & Instagram"
++            accentClassName="bg-purple-100 text-purple-700"
++            onClick={() => setActiveModule('iklan')}
++          />
+         </div>
+-      </div>
+-
+-      <WhatsAppAdGenerator products={products} />
+-      <SocialContentGenerator products={products} />
+-
+-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 -
 -        {/* KOLOM KIRI: INVENTORI */}
 -        <div className="lg:col-span-5 bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit">
@@ -360,8 +392,22 @@ index f179ad3..490e51f 100644
 -              )}
 -              <button type="submit" className="w-full bg-green-600 text-white font-bold py-2.5 rounded-lg text-sm hover:bg-green-700 transition-colors shadow-sm">Simpan Produk Baru</button>
 -            </form>
--          )}
--
++      ) : (
++        <div>
++          <button
++            type="button"
++            onClick={() => setActiveModule(null)}
++            className="mb-4 inline-flex items-center gap-1 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors"
++          >
++            <span aria-hidden="true">←</span> Kembali ke Menu
++          </button>
++
++          {activeModule === 'pesanan' && (
++            <DashboardModule title="Modul Pesanan">
++              <OrdersPanel orders={orders} updateOrderStatus={updateOrderStatus} />
++            </DashboardModule>
+           )}
+ 
 -          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
 -            {products.map((prod) => (
 -              <div key={prod.id} className={`p-4 border rounded-xl flex flex-col gap-3 transition-colors ${!prod.is_active ? 'bg-gray-100 opacity-70' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
@@ -479,7 +525,16 @@ index f179ad3..490e51f 100644
 -              <strong>{pendingOrderCount} pesanan menunggu verifikasi pembayaran.</strong>{' '}
 -              Terima pembayaran hanya setelah transfer valid. Stok akan berkurang saat pesanan diterima.
 -            </div>
--          )}
++          {activeModule === 'menu' && (
++            <DashboardModule title="Modul Menu">
++              <InventoryPanel
++                products={products}
++                createProduct={createProduct}
++                updateProduct={updateProduct}
++                toggleProductActive={toggleProductActive}
++              />
++            </DashboardModule>
+           )}
 -          {orders.length === 0 ? (
 -             <div className="bg-white p-12 text-center rounded-xl shadow-sm border border-gray-200">
 -                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -513,7 +568,7 @@ index f179ad3..490e51f 100644
 -                    <span className="block font-black text-[10px] text-gray-400 mb-1">ALAMAT PENGIRIMAN:</span>
 -                    {order.shipping_address}
 -                  </div>
--
+ 
 -                  {order.notes && order.notes.trim() !== '' && (
 -                    <div className="mt-2 text-xs text-yellow-800 bg-yellow-50 p-3 border border-yellow-200 rounded-lg shadow-sm">
 -                      <span className="block font-black text-[10px] text-yellow-600 mb-1">CATATAN:</span>
@@ -567,29 +622,33 @@ index f179ad3..490e51f 100644
 -                </div>
 -              </div>
 -            ))
--          )}
--        </div>
-+        <InventoryPanel
-+          products={products}
-+          createProduct={createProduct}
-+          updateProduct={updateProduct}
-+          toggleProductActive={toggleProductActive}
-+        />
-+        <OrdersPanel orders={orders} updateOrderStatus={updateOrderStatus} />
-       </div>
++          {activeModule === 'iklan' && (
++            <DashboardModule title="Modul Iklan">
++              <WhatsAppAdGenerator products={products} />
++              <SocialContentGenerator products={products} />
++            </DashboardModule>
+           )}
+         </div>
+-      </div>
++      )}
      </main>
    );
+ }
 diff --git a/src/app/api/admin/orders/[id]/route.ts b/src/app/api/admin/orders/[id]/route.ts
-index 81f24fb..305914a 100644
+index 81f24fb..726d0e8 100644
 --- a/src/app/api/admin/orders/[id]/route.ts
 +++ b/src/app/api/admin/orders/[id]/route.ts
-@@ -1,5 +1,5 @@
+@@ -1,8 +1,8 @@
  import { NextResponse } from 'next/server';
 -import { hasAdminSession, isSameOrigin } from '@/lib/admin-session';
 +import { requireAdmin } from '@/lib/admin-session';
  import { getSupabaseAdmin } from '@/lib/supabase-admin';
  
- const allowedStatuses = new Set(['paid', 'canceled', 'completed']);
+-const allowedStatuses = new Set(['paid', 'canceled', 'completed']);
++const allowedStatuses = new Set(['paid', 'canceled', 'completed', 'unpaid']);
+ 
+ export const runtime = 'nodejs';
+ 
 @@ -10,9 +10,8 @@ export async function PATCH(
    request: Request,
    context: RouteContext<'/api/admin/orders/[id]'>
@@ -602,6 +661,20 @@ index 81f24fb..305914a 100644
  
    const { id } = await context.params;
    const body = await request.json();
+@@ -26,10 +25,11 @@ export async function PATCH(
+     const admin = getSupabaseAdmin();
+     let resultMessage: unknown = null;
+ 
+-    if (status === 'paid' || status === 'canceled') {
++    if (status === 'paid' || status === 'canceled' || status === 'unpaid') {
++      const action = status === 'paid' ? 'APPROVE' : status === 'canceled' ? 'REJECT' : 'REVERT_TO_UNPAID';
+       const { data, error } = await admin.rpc('process_order_approval_secure', {
+         p_order_id: id,
+-        p_action: status === 'paid' ? 'APPROVE' : 'REJECT',
++        p_action: action,
+       });
+       if (error) throw error;
+       resultMessage = data;
 diff --git a/src/app/api/admin/products/[id]/route.ts b/src/app/api/admin/products/[id]/route.ts
 index e123e7d..92f4e5c 100644
 --- a/src/app/api/admin/products/[id]/route.ts
@@ -1156,9 +1229,68 @@ index 0000000..83ff9c6
 +    </main>
 +  );
 +}
+diff --git a/src/components/admin/DashboardModule.tsx b/src/components/admin/DashboardModule.tsx
+new file mode 100644
+index 0000000..6a134c8
+--- /dev/null
++++ b/src/components/admin/DashboardModule.tsx
+@@ -0,0 +1,18 @@
++"use client";
++
++import type { ReactNode } from 'react';
++
++type DashboardModuleProps = {
++  title: string;
++  children: ReactNode;
++};
++
++/** Full-width card wrapper that groups one section of the admin dashboard. */
++export default function DashboardModule({ title, children }: DashboardModuleProps) {
++  return (
++    <section className="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
++      <h2 className="text-lg font-black text-gray-400 uppercase tracking-wider mb-4">{title}</h2>
++      {children}
++    </section>
++  );
++}
+diff --git a/src/components/admin/DashboardModuleCard.tsx b/src/components/admin/DashboardModuleCard.tsx
+new file mode 100644
+index 0000000..3c0a5d7
+--- /dev/null
++++ b/src/components/admin/DashboardModuleCard.tsx
+@@ -0,0 +1,29 @@
++"use client";
++
++type DashboardModuleCardProps = {
++  icon: string;
++  title: string;
++  description: string;
++  accentClassName: string;
++  onClick: () => void;
++};
++
++/** One clickable summary card on the admin dashboard's module menu. */
++export default function DashboardModuleCard({ icon, title, description, accentClassName, onClick }: DashboardModuleCardProps) {
++  return (
++    <button
++      type="button"
++      onClick={onClick}
++      className="group text-left bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:border-gray-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-400"
++    >
++      <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl mb-4 ${accentClassName}`}>
++        <span aria-hidden="true">{icon}</span>
++      </div>
++      <h3 className="text-lg font-bold text-gray-900 mb-1">{title}</h3>
++      <p className="text-sm text-gray-500 leading-snug">{description}</p>
++      <span className="mt-4 flex items-center gap-1 text-xs font-bold text-blue-600 group-hover:gap-2 transition-all">
++        Buka modul <span aria-hidden="true">→</span>
++      </span>
++    </button>
++  );
++}
 diff --git a/src/components/admin/InventoryPanel.tsx b/src/components/admin/InventoryPanel.tsx
 new file mode 100644
-index 0000000..957a745
+index 0000000..2b10033
 --- /dev/null
 +++ b/src/components/admin/InventoryPanel.tsx
 @@ -0,0 +1,148 @@
@@ -1270,9 +1402,9 @@ index 0000000..957a745
 +  };
 +
 +  return (
-+    <div className="lg:col-span-5 bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-fit">
++    <>
 +      <div className="flex justify-between items-center mb-5 border-b pb-2">
-+        <h2 className="text-xl font-bold text-gray-800">Manajemen Inventori</h2>
++        <h3 className="text-xl font-bold text-gray-800">Menu Aktif</h3>
 +        <button
 +          onClick={() => { if (isAdding) void cancelNewProduct(); else setIsAdding(true); }}
 +          disabled={uploadingImage}
@@ -1307,15 +1439,15 @@ index 0000000..957a745
 +          />
 +        ))}
 +      </div>
-+    </div>
++    </>
 +  );
 +}
 diff --git a/src/components/admin/OrderCard.tsx b/src/components/admin/OrderCard.tsx
 new file mode 100644
-index 0000000..54afbd9
+index 0000000..969371b
 --- /dev/null
 +++ b/src/components/admin/OrderCard.tsx
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,107 @@
 +"use client";
 +
 +import type { Order } from '@/hooks/useAdminData';
@@ -1414,6 +1546,9 @@ index 0000000..54afbd9
 +            {order.status === 'unpaid' && (
 +              <button onClick={() => onUpdateStatus('canceled')} className="bg-white text-red-600 border border-red-200 px-4 py-1.5 rounded text-xs font-bold hover:bg-red-50 transition-colors shadow-sm focus:ring-2 focus:ring-red-400 outline-none">Tolak Pesanan</button>
 +            )}
++            {order.status === 'paid' && (
++              <button onClick={() => onUpdateStatus('unpaid')} className="bg-white text-amber-700 border border-amber-300 px-4 py-1.5 rounded text-xs font-bold hover:bg-amber-50 transition-colors shadow-sm focus:ring-2 focus:ring-amber-400 outline-none">↩ Batalkan Verifikasi (Kembali ke Belum Bayar)</button>
++            )}
 +          </div>
 +        </div>
 +      </div>
@@ -1422,7 +1557,7 @@ index 0000000..54afbd9
 +}
 diff --git a/src/components/admin/OrdersPanel.tsx b/src/components/admin/OrdersPanel.tsx
 new file mode 100644
-index 0000000..406a00f
+index 0000000..52a85c4
 --- /dev/null
 +++ b/src/components/admin/OrdersPanel.tsx
 @@ -0,0 +1,51 @@
@@ -1451,9 +1586,9 @@ index 0000000..406a00f
 +  };
 +
 +  return (
-+    <div className="lg:col-span-7 space-y-5">
++    <div className="space-y-5">
 +      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-+        <h2 className="text-xl font-bold text-gray-800">Antrean Pesanan Masuk</h2>
++        <h3 className="text-xl font-bold text-gray-800">Pembelian</h3>
 +        <span className="text-xs font-semibold text-gray-500">Dashboard diperbarui otomatis setiap 15 detik</span>
 +      </div>
 +      {pendingOrderCount > 0 && (
@@ -1754,7 +1889,7 @@ index 0000000..5306ac0
 +  return { isAuthenticated, isCheckingAuth, isVerifying, pinInput, setPinInput, login, logout };
 +}
 diff --git a/src/hooks/useAdminData.ts b/src/hooks/useAdminData.ts
-index 9f6bd54..257c2aa 100644
+index 9f6bd54..1ebb3c6 100644
 --- a/src/hooks/useAdminData.ts
 +++ b/src/hooks/useAdminData.ts
 @@ -28,7 +28,7 @@ type AdminDataResponse = {
@@ -1808,8 +1943,14 @@ index 9f6bd54..257c2aa 100644
      await fetchData();
    };
  
-@@ -116,12 +116,7 @@ export function useAdminData(enabled: boolean) {
-         : `Yakin ubah status jadi ${newStatus.toUpperCase()}?`;
+@@ -113,29 +113,22 @@ export function useAdminData(enabled: boolean) {
+       ? 'Yakin pembayaran sudah diverifikasi? Pesanan diterima dan stok akan dikurangi secara atomik.'
+       : newStatus === 'canceled'
+         ? 'Yakin menolak pesanan ini? Stok tidak akan dikurangi.'
+-        : `Yakin ubah status jadi ${newStatus.toUpperCase()}?`;
++        : newStatus === 'unpaid'
++          ? 'Yakin batalkan verifikasi pembayaran? Status kembali ke Belum Bayar dan stok yang sudah dipotong akan dikembalikan.'
++          : `Yakin ubah status jadi ${newStatus.toUpperCase()}?`;
      if (!confirm(confirmation)) return;
  
 -    const response = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
@@ -1821,8 +1962,10 @@ index 9f6bd54..257c2aa 100644
 +    await requestJson(`/api/admin/orders/${encodeURIComponent(orderId)}`, 'PATCH', { status: newStatus });
      await fetchData();
      if (newStatus === 'canceled') alert('Pesanan dibatalkan.');
++    if (newStatus === 'unpaid') alert('Verifikasi pembayaran dibatalkan, stok dikembalikan.');
    };
-@@ -130,12 +125,7 @@ export function useAdminData(enabled: boolean) {
+ 
+   const toggleProductActive = async (id: string, currentStatus: boolean) => {
      const action = currentStatus ? 'Arsipkan (Sembunyikan dari Publik)' : 'Aktifkan (Tampilkan ke Publik)';
      if (!confirm(`Yakin ingin ${action} produk ini?`)) return;
  
@@ -2210,3 +2353,156 @@ index 0000000..b574ad9
 +  if (pattern && !pattern.test(trimmed)) return invalid;
 +  return ok(trimmed);
 +}
+diff --git a/src/lib/push.ts b/src/lib/push.ts
+index 2bdbb3e..95e804c 100644
+--- a/src/lib/push.ts
++++ b/src/lib/push.ts
+@@ -43,7 +43,12 @@ export function getVapidPublicKey() {
+ 
+ export async function sendNewOrderPush(orderNumber: string, totalAmount: number) {
+   try {
+-    if (!configureVapid()) return false;
++    if (!configureVapid()) {
++      console.warn(
++        'Notifikasi push dilewati: VAPID belum dikonfigurasi (NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT).'
++      );
++      return false;
++    }
+ 
+     const { data, error } = await getSupabaseAdmin()
+       .from('push_subscriptions')
+@@ -55,7 +60,10 @@ export async function sendNewOrderPush(orderNumber: string, totalAmount: number)
+     }
+ 
+     const subscriptions = (data ?? []) as PushSubscriptionRow[];
+-    if (subscriptions.length === 0) return false;
++    if (subscriptions.length === 0) {
++      console.warn('Notifikasi push dilewati: belum ada admin yang mengaktifkan notifikasi (0 subscription tersimpan).');
++      return false;
++    }
+ 
+     const payload = JSON.stringify({
+       title: 'Pesanan baru masuk',
+@@ -64,6 +72,7 @@ export async function sendNewOrderPush(orderNumber: string, totalAmount: number)
+     });
+ 
+     let delivered = false;
++    let failed = 0;
+     await Promise.all(
+       subscriptions.map(async (subscription) => {
+         try {
+@@ -79,6 +88,7 @@ export async function sendNewOrderPush(orderNumber: string, totalAmount: number)
+           );
+           delivered = true;
+         } catch (error) {
++          failed += 1;
+           const statusCode = (error as { statusCode?: number }).statusCode;
+           if (statusCode === 404 || statusCode === 410) {
+             await getSupabaseAdmin().from('push_subscriptions').delete().eq('id', subscription.id);
+@@ -89,6 +99,9 @@ export async function sendNewOrderPush(orderNumber: string, totalAmount: number)
+       })
+     );
+ 
++    console.log(
++      `Notifikasi push: ${subscriptions.length - failed}/${subscriptions.length} perangkat admin terkirim untuk pesanan ${orderNumber}.`
++    );
+     return delivered;
+   } catch (error) {
+     console.error('Notifikasi Web Push gagal diproses:', error);
+diff --git a/supabase/migrations/20260915_revert_paid_to_unpaid.sql b/supabase/migrations/20260915_revert_paid_to_unpaid.sql
+new file mode 100644
+index 0000000..063d2bc
+--- /dev/null
++++ b/supabase/migrations/20260915_revert_paid_to_unpaid.sql
+@@ -0,0 +1,91 @@
++-- Menambahkan aksi REVERT_TO_UNPAID pada process_order_approval_secure.
++-- Dipakai saat admin salah klik "Terima Pembayaran" dan perlu membatalkan
++-- verifikasi: stok yang sudah dipotong saat APPROVE dikembalikan secara
++-- atomik, lalu status order dikembalikan ke 'unpaid'. Hanya bisa dijalankan
++-- dari status 'paid' (order yang sudah 'canceled'/'completed' tidak bisa
++-- di-revert lewat aksi ini).
++
++create or replace function public.process_order_approval_secure(
++  p_order_id text,
++  p_action text
++)
++returns jsonb
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  v_order public.orders%rowtype;
++  v_item record;
++  v_action text := upper(trim(p_action));
++begin
++  select *
++  into v_order
++  from public.orders
++  where id::text = p_order_id or order_number = p_order_id or order_id = p_order_id
++  for update;
++
++  if not found then
++    raise exception using errcode = 'P0002', message = 'Order tidak ditemukan';
++  end if;
++
++  if v_action = 'REJECT' then
++    if v_order.status <> 'unpaid' then
++      raise exception using errcode = 'P0001', message = 'Order sudah diproses';
++    end if;
++
++    update public.orders set status = 'canceled' where id = v_order.id;
++    return jsonb_build_object('status', 'canceled', 'order_number', v_order.order_number);
++  end if;
++
++  if v_action = 'REVERT_TO_UNPAID' then
++    if v_order.status <> 'paid' then
++      raise exception using errcode = 'P0001', message = 'Hanya pesanan berstatus paid yang bisa dikembalikan ke unpaid';
++    end if;
++
++    for v_item in
++      select oi.product_id, oi.quantity
++      from public.order_items oi
++      where oi.order_id = v_order.id
++      order by oi.product_id
++      for update
++    loop
++      update public.products
++      set stock = stock + v_item.quantity
++      where id = v_item.product_id;
++
++      if not found then
++        raise exception using errcode = 'P0001', message = 'Produk tidak ditemukan saat mengembalikan stok';
++      end if;
++    end loop;
++
++    update public.orders set status = 'unpaid' where id = v_order.id;
++    return jsonb_build_object('status', 'unpaid', 'order_number', v_order.order_number);
++  end if;
++
++  if v_action <> 'APPROVE' or v_order.status <> 'unpaid' then
++    raise exception using errcode = 'P0001', message = 'Aksi atau status order tidak valid';
++  end if;
++
++  for v_item in
++    select oi.product_id, oi.quantity
++    from public.order_items oi
++    where oi.order_id = v_order.id
++    order by oi.product_id
++    for update
++  loop
++    update public.products
++    set stock = stock - v_item.quantity
++    where id = v_item.product_id
++      and is_active = true
++      and stock >= v_item.quantity;
++
++    if not found then
++      raise exception using errcode = 'P0001', message = 'Stok tidak mencukupi';
++    end if;
++  end loop;
++
++  update public.orders set status = 'paid' where id = v_order.id;
++  return jsonb_build_object('status', 'paid', 'order_number', v_order.order_number);
++end;
++$$;
