@@ -23,19 +23,25 @@ export default function OrdersPanel({ orders, updateOrderStatus }: OrdersPanelPr
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <h3 className="text-xl font-bold text-gray-800">Pembelian</h3>
-        <span className="text-xs font-semibold text-gray-500">Dashboard diperbarui otomatis setiap 15 detik</span>
+    <div className="space-y-4 sm:space-y-5">
+      <div className="mb-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <h3 className="text-lg font-black text-slate-900 sm:text-xl">Daftar Pembelian</h3>
+        <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" aria-hidden="true" />
+          Diperbarui tiap 15 detik
+        </span>
       </div>
       {pendingOrderCount > 0 && (
-        <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900">
-          <strong>{pendingOrderCount} pesanan menunggu verifikasi pembayaran.</strong>{' '}
-          Terima pembayaran hanya setelah transfer valid. Stok akan berkurang saat pesanan diterima.
+        <div className="mb-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+          <span className="text-xl" aria-hidden="true">⚠️</span>
+          <p>
+            <strong className="block">{pendingOrderCount} pesanan menunggu verifikasi.</strong>
+            Terima pembayaran cuma setelah transfer valid. Stok berkurang saat pesanan diterima.
+          </p>
         </div>
       )}
       {orders.length === 0 ? (
-        <div className="bg-white p-12 text-center rounded-xl shadow-sm border border-gray-200">
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-12 text-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
           </svg>

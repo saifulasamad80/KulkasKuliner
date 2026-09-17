@@ -9,22 +9,46 @@ type AdminHeaderProps = {
 
 export default function AdminHeader({ totalRevenue, onLogout }: AdminHeaderProps) {
   return (
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-gray-300 pb-4 gap-4">
-      <div>
-        <h1 className="text-3xl font-extrabold text-gray-900 flex items-center gap-2">
-          Dashboard Admin
-          <span className="bg-red-100 text-red-600 text-[10px] uppercase px-2 py-0.5 rounded-full border border-red-200">Secured</span>
-        </h1>
-        <p className="text-gray-500 mt-1">Sistem Manajemen KulkasKuliner</p>
-      </div>
-      <div className="flex items-center flex-wrap gap-4 w-full md:w-auto">
-        <div className="bg-green-100 border border-green-300 px-5 py-2 rounded-lg flex-1 md:flex-none text-right shadow-sm">
-          <span className="block text-xs font-bold text-green-700 uppercase tracking-wider mb-0.5">Total Pendapatan</span>
-          <span className="block text-xl font-black text-green-800">Rp {totalRevenue.toLocaleString('id-ID')}</span>
+    <header className="relative mb-7 overflow-hidden rounded-[1.75rem] bg-slate-950 p-5 text-white shadow-[0_18px_45px_-24px_rgba(15,23,42,0.8)] sm:p-6 lg:p-7">
+      <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-red-600/25 blur-3xl" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-emerald-500/15 blur-3xl" />
+
+      <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-2xl shadow-lg shadow-red-950/40" aria-hidden="true">
+              🧊
+            </div>
+            <div className="min-w-0">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-[0.2em] text-red-300">KulkasKuliner</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  Sesi Aman
+                </span>
+              </div>
+              <h1 className="truncate text-2xl font-black tracking-tight sm:text-3xl">Dashboard Admin</h1>
+            </div>
+          </div>
+          <p className="max-w-md text-sm leading-6 text-slate-300">Kelola pesanan, katalog, dan promosi dari satu tempat.</p>
         </div>
-        <AdminPushSettings />
-        <button onClick={onLogout} className="bg-red-100 text-red-700 border border-red-300 px-8 py-2.5 rounded-lg text-sm font-bold hover:bg-red-200 transition-colors shadow-sm text-center">Kunci Keluar</button>
+
+        <div className="grid w-full grid-cols-1 gap-3 min-[440px]:grid-cols-2 sm:grid-cols-[minmax(210px,1fr)_auto_auto] lg:w-auto">
+          <div className="col-span-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-sm sm:col-span-1 sm:min-w-[210px]">
+            <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">Total Pendapatan</span>
+            <span className="block text-2xl font-black tracking-tight text-white">Rp {totalRevenue.toLocaleString('id-ID')}</span>
+          </div>
+          <AdminPushSettings />
+          <button
+            type="button"
+            onClick={onLogout}
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-red-400/30 bg-red-500/15 px-4 py-3 text-sm font-black text-red-100 transition-colors hover:bg-red-500/25 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-slate-950 sm:w-auto"
+          >
+            <span aria-hidden="true">↗</span>
+            Kunci Keluar
+          </button>
+        </div>
       </div>
-    </div>
+    </header>
   );
 }

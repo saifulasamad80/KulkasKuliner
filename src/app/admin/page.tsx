@@ -45,68 +45,89 @@ export default function AdminDashboard() {
   const activeMenuCount = products.filter((product) => product.is_active).length;
 
   return (
-    <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-50">
-      <AdminHeader totalRevenue={totalRevenue} onLogout={logout} />
+    <main className="min-h-screen bg-[#f4f6f8]">
+      <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+        <AdminHeader totalRevenue={totalRevenue} onLogout={logout} />
 
-      {activeModule === null ? (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <DashboardModuleCard
-            icon="🧾"
-            title="Modul Pesanan"
-            description={pendingOrderCount > 0 ? `${pendingOrderCount} pesanan menunggu verifikasi` : 'Tidak ada pesanan yang menunggu verifikasi'}
-            theme="cyan"
-            onClick={() => setActiveModule('pesanan')}
-          />
-          <DashboardModuleCard
-            icon="🍱"
-            title="Modul Menu"
-            description={`${activeMenuCount} menu aktif dari ${products.length} total produk`}
-            theme="green"
-            onClick={() => setActiveModule('menu')}
-          />
-          <DashboardModuleCard
-            icon="📢"
-            title="Modul Iklan"
-            description="Generator konten promosi WhatsApp & Instagram"
-            theme="purple"
-            onClick={() => setActiveModule('iklan')}
-          />
-        </div>
-      ) : (
-        <div>
-          <button
-            type="button"
-            onClick={() => setActiveModule(null)}
-            className="mb-4 inline-flex items-center gap-1 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            <span aria-hidden="true">←</span> Kembali ke Menu
-          </button>
+        {activeModule === null ? (
+          <section aria-labelledby="admin-module-heading">
+            <div className="mb-5 flex items-end justify-between gap-4 px-1">
+              <div>
+                <p className="mb-1 text-xs font-black uppercase tracking-[0.18em] text-red-600">Pusat Kendali</p>
+                <h2 id="admin-module-heading" className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                  Mau kelola apa?
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-slate-500">Pilih satu modul untuk mulai bekerja.</p>
+              </div>
+              <span className="hidden rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-500 shadow-sm sm:inline-flex">
+                3 modul aktif
+              </span>
+            </div>
 
-          {activeModule === 'pesanan' && (
-            <DashboardModule title="Modul Pesanan">
-              <OrdersPanel orders={orders} updateOrderStatus={updateOrderStatus} />
-            </DashboardModule>
-          )}
-
-          {activeModule === 'menu' && (
-            <DashboardModule title="Modul Menu">
-              <InventoryPanel
-                products={products}
-                createProduct={createProduct}
-                updateProduct={updateProduct}
-                toggleProductActive={toggleProductActive}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:gap-5">
+              <DashboardModuleCard
+                icon="🧾"
+                eyebrow={pendingOrderCount > 0 ? `${pendingOrderCount} perlu dicek` : 'Semua beres'}
+                title="Modul Pesanan"
+                description={pendingOrderCount > 0 ? `${pendingOrderCount} pesanan menunggu verifikasi pembayaran` : 'Tidak ada pesanan yang menunggu verifikasi'}
+                theme="cyan"
+                onClick={() => setActiveModule('pesanan')}
               />
-            </DashboardModule>
-          )}
+              <DashboardModuleCard
+                icon="🍱"
+                eyebrow={`${activeMenuCount} menu tayang`}
+                title="Modul Menu"
+                description={`${activeMenuCount} menu aktif dari ${products.length} total produk`}
+                theme="green"
+                onClick={() => setActiveModule('menu')}
+              />
+              <DashboardModuleCard
+                icon="📢"
+                eyebrow="Siap promosi"
+                title="Modul Iklan"
+                description="Bikin konten promosi WhatsApp, Instagram, dan TikTok"
+                theme="purple"
+                onClick={() => setActiveModule('iklan')}
+              />
+            </div>
+          </section>
+        ) : (
+          <section aria-label="Modul admin aktif">
+            <button
+              type="button"
+              onClick={() => setActiveModule(null)}
+              className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2"
+            >
+              <span className="text-lg leading-none" aria-hidden="true">←</span>
+              Semua Modul
+            </button>
 
-          {activeModule === 'iklan' && (
-            <DashboardModule title="Modul Iklan">
-              <WhatsAppAdGenerator products={products} />
-              <SocialContentGenerator products={products} />
-            </DashboardModule>
-          )}
-        </div>
-      )}
+            {activeModule === 'pesanan' && (
+              <DashboardModule title="Modul Pesanan" subtitle="Verifikasi pembayaran dan pantau semua pesanan masuk.">
+                <OrdersPanel orders={orders} updateOrderStatus={updateOrderStatus} />
+              </DashboardModule>
+            )}
+
+            {activeModule === 'menu' && (
+              <DashboardModule title="Modul Menu" subtitle="Atur produk, stok, harga, foto, dan status tayang.">
+                <InventoryPanel
+                  products={products}
+                  createProduct={createProduct}
+                  updateProduct={updateProduct}
+                  toggleProductActive={toggleProductActive}
+                />
+              </DashboardModule>
+            )}
+
+            {activeModule === 'iklan' && (
+              <DashboardModule title="Modul Iklan" subtitle="Siapkan materi promosi dari data katalog yang sedang aktif.">
+                <WhatsAppAdGenerator products={products} />
+                <SocialContentGenerator products={products} />
+              </DashboardModule>
+            )}
+          </section>
+        )}
+      </div>
     </main>
   );
 }

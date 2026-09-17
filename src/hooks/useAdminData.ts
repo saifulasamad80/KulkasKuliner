@@ -39,6 +39,22 @@ export type ProductInput = {
   menu_name?: string | null;
 };
 
+export type ProductVariantInput = {
+  variant_name: string;
+  price: number;
+  stock: number;
+};
+
+export type VariantMenuInput = {
+  kind: 'variants';
+  menu_name: string;
+  image_url: string;
+  description: string;
+  variants: ProductVariantInput[];
+};
+
+export type CreateProductInput = ProductInput | VariantMenuInput;
+
 async function readError(response: Response) {
   const body = (await response.json().catch(() => null)) as { error?: string } | null;
   return body?.error || 'Permintaan gagal diproses.';
@@ -98,7 +114,7 @@ export function useAdminData(enabled: boolean) {
     };
   }, [enabled, fetchData]);
 
-  const createProduct = async (input: ProductInput) => {
+  const createProduct = async (input: CreateProductInput) => {
     await requestJson('/api/admin/products', 'POST', input);
     await fetchData();
   };

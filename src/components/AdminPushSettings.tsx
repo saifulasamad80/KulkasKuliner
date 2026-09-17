@@ -135,6 +135,26 @@ export default function AdminPushSettings() {
     }
   };
 
-  if (!supported) return <p className="text-xs text-gray-500">Browser ini belum mendukung Web Push.</p>;
-  return <div className="flex flex-wrap items-center gap-3"><button onClick={() => void (enabled ? disable() : enable())} disabled={busy} className={`px-4 py-2 rounded-lg text-xs font-bold text-white transition-colors disabled:opacity-50 ${enabled ? 'bg-gray-700 hover:bg-gray-800' : 'bg-blue-600 hover:bg-blue-700'}`}>{busy ? 'Memproses...' : enabled ? 'Matikan Notifikasi' : 'Aktifkan Notifikasi Pesanan'}</button>{message && <span className="text-xs font-medium text-gray-600">{message}</span>}</div>;
+  if (!supported) {
+    return (
+      <div className="flex min-h-12 items-center rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold leading-4 text-slate-300">
+        Push belum didukung
+      </div>
+    );
+  }
+
+  return (
+    <div className="col-span-1 flex min-w-0 flex-col gap-2 sm:w-auto">
+      <button
+        type="button"
+        onClick={() => void (enabled ? disable() : enable())}
+        disabled={busy}
+        className={`inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-wait disabled:opacity-50 sm:w-auto ${enabled ? 'bg-slate-700 hover:bg-slate-600' : 'bg-blue-600 hover:bg-blue-500'}`}
+      >
+        <span aria-hidden="true">{enabled ? '🔕' : '🔔'}</span>
+        {busy ? 'Memproses...' : enabled ? 'Matikan Notifikasi' : 'Aktifkan Notifikasi'}
+      </button>
+      {message && <span className="max-w-64 text-xs font-medium leading-4 text-slate-300">{message}</span>}
+    </div>
+  );
 }

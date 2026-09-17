@@ -282,13 +282,13 @@ export default function SocialContentGenerator({ products }: SocialContentGenera
           <h2 className="text-xl font-black text-gray-900 sm:text-2xl">Generator Konten Sosial</h2>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">Pilih carousel foto kalau belum punya video. Generator tetap bikin hook, caption, Story, CTA, dan FOMO berdasarkan jam Jakarta serta stok nyata.</p>
         </div>
-        <button type="button" onClick={generateContent} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400"><span className="text-lg leading-none">✦</span>Buat Konten Baru</button>
+        <button type="button" onClick={generateContent} className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400 sm:w-auto"><span className="text-lg leading-none">✦</span>Buat Konten Baru</button>
       </div>
 
       <div className="border-b border-purple-100 px-5 pt-5 sm:px-6">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Pilih format konten">
-          <button type="button" onClick={() => setMode("carousel")} className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${mode === "carousel" ? "bg-purple-600 text-white" : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"}`}>📸 Foto Carousel (rekomendasi)</button>
-          <button type="button" onClick={() => setMode("video")} className={`rounded-lg px-4 py-2 text-sm font-bold transition-colors ${mode === "video" ? "bg-purple-600 text-white" : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"}`}>🎬 Script Video</button>
+        <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:flex sm:flex-wrap" role="group" aria-label="Pilih format konten">
+          <button type="button" onClick={() => setMode("carousel")} className={`min-h-11 rounded-lg px-4 py-2 text-sm font-bold transition-colors ${mode === "carousel" ? "bg-purple-600 text-white" : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"}`}>📸 Foto Carousel (rekomendasi)</button>
+          <button type="button" onClick={() => setMode("video")} className={`min-h-11 rounded-lg px-4 py-2 text-sm font-bold transition-colors ${mode === "video" ? "bg-purple-600 text-white" : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"}`}>🎬 Script Video</button>
         </div>
         <p className="pb-5 pt-2 text-xs text-gray-500">{mode === "carousel" ? "Pakai foto produk di katalog—susun 5 slide, lalu upload sebagai carousel Instagram." : "Kalau nanti sudah siap rekam, satu video 9:16 bisa dipakai di TikTok dan Instagram Reels."}</p>
       </div>
@@ -297,14 +297,14 @@ export default function SocialContentGenerator({ products }: SocialContentGenera
         <div>
           <label htmlFor="social-content-copy" className="mb-2 block text-xs font-black uppercase tracking-wider text-gray-600">{generatedMode === "carousel" ? "Paket carousel — bebas diedit" : "Paket konten — bebas diedit"}</label>
           <textarea id="social-content-copy" value={content} onChange={(event) => setContent(event.target.value)} rows={generatedMode === "carousel" ? 28 : 24} disabled={!content} className="w-full resize-y rounded-xl border border-gray-300 bg-white p-4 text-sm leading-6 text-gray-800 shadow-inner outline-none transition-shadow focus:border-purple-500 focus:ring-2 focus:ring-purple-200 disabled:cursor-wait disabled:bg-gray-50" aria-label="Preview paket konten sosial" />
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={() => void copyContent()} disabled={!content} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">{copied ? "✓ Tersalin" : "Salin Paket Konten"}</button>
+          <div className="mt-3 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:flex sm:flex-wrap">
+            <button type="button" onClick={() => void copyContent()} disabled={!content} className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">{copied ? "✓ Tersalin" : "Salin Paket Konten"}</button>
             {generatedMode === "carousel" && <>
-              <button type="button" onClick={() => void shareCarousel()} disabled={!content || isSharing} className="rounded-lg bg-pink-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-gray-300">{isSharing ? "Menyiapkan foto…" : "Bagikan Foto + Caption"}</button>
-              <button type="button" onClick={() => void downloadCarouselImages()} disabled={!content || isSharing} className="rounded-lg border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-bold text-pink-700 transition-colors hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-50">Download Foto Carousel</button>
+              <button type="button" onClick={() => void shareCarousel()} disabled={!content || isSharing} className="min-h-11 rounded-lg bg-pink-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-gray-300">{isSharing ? "Menyiapkan foto…" : "Bagikan Foto + Caption"}</button>
+              <button type="button" onClick={() => void downloadCarouselImages()} disabled={!content || isSharing} className="min-h-11 rounded-lg border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-bold text-pink-700 transition-colors hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-50">Download Foto Carousel</button>
             </>}
-            <a href={content ? getPlatformUrl("instagram") : undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!content} className={`inline-flex items-center rounded-lg px-4 py-2 text-sm font-bold text-white transition-colors ${content ? "bg-pink-600 hover:bg-pink-700" : "pointer-events-none bg-gray-300"}`}>Buka Instagram →</a>
-            <a href={content ? getPlatformUrl("tiktok") : undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!content} className={`inline-flex items-center rounded-lg px-4 py-2 text-sm font-bold text-white transition-colors ${content ? "bg-gray-900 hover:bg-black" : "pointer-events-none bg-gray-300"}`}>Buka TikTok →</a>
+            <a href={content ? getPlatformUrl("instagram") : undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!content} className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2 text-center text-sm font-bold text-white transition-colors ${content ? "bg-pink-600 hover:bg-pink-700" : "pointer-events-none bg-gray-300"}`}>Buka Instagram →</a>
+            <a href={content ? getPlatformUrl("tiktok") : undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!content} className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2 text-center text-sm font-bold text-white transition-colors ${content ? "bg-gray-900 hover:bg-black" : "pointer-events-none bg-gray-300"}`}>Buka TikTok →</a>
           </div>
         </div>
 

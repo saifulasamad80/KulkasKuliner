@@ -147,7 +147,7 @@ export default function WhatsAppAdGenerator({ products }: WhatsAppAdGeneratorPro
         <button
           type="button"
           onClick={generateNewAd}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400"
+          className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 sm:w-auto"
         >
           <span className="text-lg leading-none">✦</span>
           Buat Iklan Baru
@@ -168,12 +168,12 @@ export default function WhatsAppAdGenerator({ products }: WhatsAppAdGeneratorPro
             className="w-full resize-y rounded-xl border border-gray-300 bg-white p-4 text-sm leading-6 text-gray-800 shadow-inner outline-none transition-shadow focus:border-green-500 focus:ring-2 focus:ring-green-200 disabled:cursor-wait disabled:bg-gray-50"
             aria-label="Preview teks iklan WhatsApp"
           />
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap">
             <button
               type="button"
               onClick={() => void copyMessage()}
               disabled={!message}
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {copied ? "✓ Tersalin" : "Salin Teks"}
             </button>
@@ -182,7 +182,7 @@ export default function WhatsAppAdGenerator({ products }: WhatsAppAdGeneratorPro
               target="_blank"
               rel="noopener noreferrer"
               aria-disabled={!message}
-              className={`inline-flex items-center rounded-lg px-4 py-2 text-sm font-bold text-white transition-colors ${message ? "bg-[#25D366] hover:bg-[#1ebe5d]" : "pointer-events-none bg-gray-300"}`}
+              className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2 text-center text-sm font-bold text-white transition-colors ${message ? "bg-[#25D366] hover:bg-[#1ebe5d]" : "pointer-events-none bg-gray-300"}`}
             >
               Buka WhatsApp &amp; Share →
             </a>

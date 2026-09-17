@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import type { Product } from '@/lib/types';
-import type { ProductInput } from '@/hooks/useAdminData';
+import type { CreateProductInput, ProductInput } from '@/hooks/useAdminData';
 import { deleteMenuImage, useProductForm } from '@/hooks/useProductForm';
 import ProductAddForm from './ProductAddForm';
 import ProductListItem from './ProductListItem';
 
 type InventoryPanelProps = {
   products: Product[];
-  createProduct: (input: ProductInput) => Promise<void>;
+  createProduct: (input: CreateProductInput) => Promise<void>;
   updateProduct: (id: string, input: ProductInput) => Promise<void>;
   toggleProductActive: (id: string, currentStatus: boolean) => Promise<void>;
 };
@@ -18,6 +18,7 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const newForm = useProductForm();
   const editForm = useProductForm();
@@ -48,20 +49,27 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
     setEditingId(null);
   };
 
-  const handleAddProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newForm.value.name || newForm.value.price <= 0) return alert("Nama dan Harga wajib diisi valid!");
+  const handleAddProduct = async (input: CreateProductInput) => {
+    if (isSaving) return;
+    setIsSaving(true);
     try {
-      await createProduct(newForm.value);
-      alert("Produk ditambah!");
+      await createProduct(input);
+      alert('Menu berhasil ditambahkan!');
       newForm.reset();
       setIsAdding(false);
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Produk gagal disimpan.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const saveEditProduct = async (id: string) => {
+    if (isSaving) return;
+    if (editForm.value.name.trim().length < 2 || editForm.value.price <= 0 || editForm.value.stock < 0) {
+      return alert('Nama, harga, dan stok belum valid. Cek lagi sebelum menyimpan.');
+    }
+    setIsSaving(true);
     try {
       await updateProduct(id, {
         name: editForm.value.name,
@@ -77,6 +85,8 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
       await editForm.cleanUpAfterSave();
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Produk gagal diperbarui.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -107,12 +117,16 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
 
   return (
     <>
-      <div className="flex justify-between items-center mb-5 border-b pb-2">
-        <h3 className="text-xl font-bold text-gray-800">Menu Aktif</h3>
+      <div className="mb-5 flex flex-col gap-3 border-b border-slate-100 pb-4 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
+        <div>
+          <h3 className="text-lg font-black text-slate-900 sm:text-xl">Daftar Produk</h3>
+          <p className="mt-0.5 text-xs font-medium text-slate-500">{products.length} produk tersimpan</p>
+        </div>
         <button
+          type="button"
           onClick={() => { if (isAdding) void cancelNewProduct(); else setIsAdding(true); }}
-          disabled={uploadingImage}
-          className="bg-green-600 text-white px-3 py-1 text-sm font-bold rounded hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
+          disabled={uploadingImage || isSaving}
+          className={`inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-black shadow-sm transition-colors disabled:opacity-50 min-[420px]:w-auto ${isAdding ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50' : 'bg-green-600 text-white hover:bg-green-700'}`}
         >
           {isAdding ? "Batal" : "+ Tambah Produk"}
         </button>
@@ -122,12 +136,13 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
         <ProductAddForm
           form={newForm}
           uploadingImage={uploadingImage}
+          isSaving={isSaving}
           onSubmit={handleAddProduct}
           onUploadImage={(file) => void uploadProductImage(file, newForm)}
         />
       )}
 
-      <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+      <div className="space-y-3 sm:max-h-[600px] sm:overflow-y-auto sm:pr-2 sm:custom-scrollbar">
         {products.map((product) => (
           <ProductListItem
             key={product.id}
@@ -135,6 +150,7 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
             isEditing={editingId === product.id}
             editForm={editForm}
             uploadingImage={uploadingImage}
+            isSaving={isSaving}
             onStartEdit={startEditProduct}
             onSaveEdit={() => void saveEditProduct(product.id)}
             onCancelEdit={() => void cancelEditProduct()}
