@@ -132,14 +132,14 @@ export default function WhatsAppAdGenerator({ products }: WhatsAppAdGeneratorPro
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-green-200 bg-linear-to-br from-green-50 via-white to-emerald-50 shadow-sm">
+    <section className="mb-8 overflow-hidden rounded-2xl border border-green-200 bg-linear-to-br from-green-50 via-white to-emerald-50 shadow-sm">
       <div className="flex flex-col gap-4 border-b border-green-100 p-5 sm:p-6 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="mb-1 flex items-center gap-2">
             <span className="rounded-full bg-green-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white">Marketing</span>
             <span className="text-xs font-semibold text-green-700">Live dari katalog aktif</span>
           </div>
-          <h3 className="text-xl font-black text-gray-900 sm:text-2xl">Generator WhatsApp</h3>
+          <h2 className="text-xl font-black text-gray-900 sm:text-2xl">Generator Iklan WhatsApp</h2>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">
             Bikin copy iklan baru berdasarkan jam Jakarta, hari, dan kondisi stok. Tinggal edit kalau perlu lalu share.
           </p>

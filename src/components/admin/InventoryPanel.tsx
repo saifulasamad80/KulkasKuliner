@@ -106,7 +106,7 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
   };
 
   return (
-    <div id="inventori" className="h-fit rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+    <>
       <div className="flex justify-between items-center mb-5 border-b pb-2">
         <h3 className="text-xl font-bold text-gray-800">Menu Aktif</h3>
         <button
@@ -143,6 +143,6 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
           />
         ))}
       </div>
-    </div>
+    </>
   );
 }

@@ -91,15 +91,12 @@ export async function GET() {
       throw new Error('Data dashboard tidak lengkap.');
     }
 
-    const orders = ((ordersResult.data ?? []) as unknown as AdminOrder[]).map((order) => ({
-      ...order,
-      status: String(order.status || '').trim().toLowerCase(),
-    }));
+    const orders = ordersResult.data;
     const products = productsResult.data;
     const revenueRows = revenueResult.data;
 
     const totalRevenue = (revenueRows ?? []).reduce((total, order) => {
-      const status = String(order.status || '').trim().toLowerCase();
+      const status = String(order.status);
       return status === 'paid' || status === 'completed'
         ? total + Number(order.total_amount || 0)
         : total;
@@ -107,7 +104,7 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        orders,
+        orders: (orders ?? []) as unknown as AdminOrder[],
         products: (products ?? []) as unknown as Product[],
         totalRevenue,
       },

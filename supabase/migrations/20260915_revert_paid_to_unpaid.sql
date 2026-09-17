@@ -89,6 +89,3 @@ begin
   return jsonb_build_object('status', 'paid', 'order_number', v_order.order_number);
 end;
 $$;
-
-revoke execute on function public.process_order_approval_secure(text, text) from public, anon, authenticated;
-grant execute on function public.process_order_approval_secure(text, text) to service_role;

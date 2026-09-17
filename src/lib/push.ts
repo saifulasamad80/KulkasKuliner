@@ -8,8 +8,6 @@ type PushSubscriptionRow = {
   auth: string;
 };
 
-export type VapidIssue = 'missing-public' | 'missing-private' | 'missing-subject' | 'bad-subject' | null;
-
 let vapidConfigured = false;
 
 async function withTimeout<T>(promise: Promise<T>, milliseconds: number) {
@@ -26,40 +24,28 @@ async function withTimeout<T>(promise: Promise<T>, milliseconds: number) {
   }
 }
 
-export function getVapidStatus() {
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() || '';
-  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim() || '';
-  const subject = process.env.VAPID_SUBJECT?.trim() || '';
-  const subjectOk = /^mailto:/i.test(subject) || /^https:\/\//i.test(subject);
-  let issue: VapidIssue = null;
-  if (!publicKey) issue = 'missing-public';
-  else if (!privateKey) issue = 'missing-private';
-  else if (!subject) issue = 'missing-subject';
-  else if (!subjectOk) issue = 'bad-subject';
-
-  return { publicKey, privateKey, subject, ready: issue === null, issue };
-}
-
 function configureVapid() {
-  const status = getVapidStatus();
-  if (!status.ready) return false;
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const subject = process.env.VAPID_SUBJECT;
+
+  if (!publicKey || !privateKey || !subject) return false;
   if (!vapidConfigured) {
-    webpush.setVapidDetails(status.subject, status.publicKey, status.privateKey);
+    webpush.setVapidDetails(subject, publicKey, privateKey);
     vapidConfigured = true;
   }
   return true;
 }
 
 export function getVapidPublicKey() {
-  return getVapidStatus().publicKey;
+  return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
 }
 
 export async function sendNewOrderPush(orderNumber: string, totalAmount: number) {
   try {
-    const vapid = getVapidStatus();
     if (!configureVapid()) {
       console.warn(
-        `Notifikasi push dilewati: VAPID belum siap (${vapid.issue || 'unknown'}). Isi NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, dan VAPID_SUBJECT (mailto: atau https://).`
+        'Notifikasi push dilewati: VAPID belum dikonfigurasi (NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT).'
       );
       return false;
     }
@@ -96,10 +82,9 @@ export async function sendNewOrderPush(orderNumber: string, totalAmount: number)
                 endpoint: subscription.endpoint,
                 keys: { p256dh: subscription.p256dh, auth: subscription.auth },
               },
-              payload,
-              { TTL: 86_400, urgency: 'high' }
+              payload
             ),
-            12_000
+            5_000
           );
           delivered = true;
         } catch (error) {
@@ -107,7 +92,6 @@ export async function sendNewOrderPush(orderNumber: string, totalAmount: number)
           const statusCode = (error as { statusCode?: number }).statusCode;
           if (statusCode === 404 || statusCode === 410) {
             await getSupabaseAdmin().from('push_subscriptions').delete().eq('id', subscription.id);
-            console.warn(`Subscription push kedaluwarsa dihapus (${subscription.id}).`);
           } else {
             console.error('Pengiriman Web Push gagal:', error);
           }

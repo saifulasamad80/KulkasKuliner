@@ -23,7 +23,7 @@ export default function OrdersPanel({ orders, updateOrderStatus }: OrdersPanelPr
   };
 
   return (
-    <div id="pembelian" className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <h3 className="text-xl font-bold text-gray-800">Pembelian</h3>
         <span className="text-xs font-semibold text-gray-500">Dashboard diperbarui otomatis setiap 15 detik</span>

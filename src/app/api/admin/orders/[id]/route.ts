@@ -42,11 +42,8 @@ export async function PATCH(
     return NextResponse.json({ result: resultMessage });
   } catch (error) {
     console.error('Status pesanan gagal diperbarui:', error);
-    const message = error && typeof error === 'object' && 'message' in error
-      ? String((error as { message: unknown }).message).trim()
-      : '';
     return NextResponse.json(
-      { error: message || 'Status pesanan gagal diperbarui.' },
+      { error: 'Status pesanan gagal diperbarui. Stok mungkin tidak mencukupi.' },
       { status: 409 }
     );
   }

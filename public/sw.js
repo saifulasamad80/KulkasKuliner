@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kulkaskuliner-v3';
+const CACHE_NAME = 'kulkaskuliner-v2';
 
 // Aset statis yang mutlak harus ada untuk PWA
 const urlsToCache = [
