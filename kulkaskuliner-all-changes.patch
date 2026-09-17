@@ -1,5 +1,5 @@
 diff --git a/src/app/admin/page.tsx b/src/app/admin/page.tsx
-index f179ad3..ba66038 100644
+index f179ad3..7c6a01c 100644
 --- a/src/app/admin/page.tsx
 +++ b/src/app/admin/page.tsx
 @@ -1,550 +1,112 @@
@@ -307,26 +307,26 @@ index f179ad3..ba66038 100644
 +      <AdminHeader totalRevenue={totalRevenue} onLogout={logout} />
 +
 +      {activeModule === null ? (
-+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
++        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 +          <DashboardModuleCard
 +            icon="🧾"
 +            title="Modul Pesanan"
 +            description={pendingOrderCount > 0 ? `${pendingOrderCount} pesanan menunggu verifikasi` : 'Tidak ada pesanan yang menunggu verifikasi'}
-+            accentClassName="bg-blue-100 text-blue-700"
++            theme="cyan"
 +            onClick={() => setActiveModule('pesanan')}
 +          />
 +          <DashboardModuleCard
 +            icon="🍱"
 +            title="Modul Menu"
 +            description={`${activeMenuCount} menu aktif dari ${products.length} total produk`}
-+            accentClassName="bg-green-100 text-green-700"
++            theme="green"
 +            onClick={() => setActiveModule('menu')}
 +          />
 +          <DashboardModuleCard
 +            icon="📢"
 +            title="Modul Iklan"
 +            description="Generator konten promosi WhatsApp & Instagram"
-+            accentClassName="bg-purple-100 text-purple-700"
++            theme="purple"
 +            onClick={() => setActiveModule('iklan')}
 +          />
          </div>
@@ -1255,39 +1255,66 @@ index 0000000..6a134c8
 +}
 diff --git a/src/components/admin/DashboardModuleCard.tsx b/src/components/admin/DashboardModuleCard.tsx
 new file mode 100644
-index 0000000..3c0a5d7
+index 0000000..03f7df4
 --- /dev/null
 +++ b/src/components/admin/DashboardModuleCard.tsx
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,56 @@
 +"use client";
++
++const THEMES = {
++  cyan: {
++    card: 'from-white to-cyan-50 border-cyan-200',
++    icon: 'bg-gradient-to-br from-cyan-400 to-teal-500',
++  },
++  green: {
++    card: 'from-white to-lime-50 border-lime-200',
++    icon: 'bg-gradient-to-br from-lime-400 to-green-500',
++  },
++  purple: {
++    card: 'from-white to-purple-50 border-purple-200',
++    icon: 'bg-gradient-to-br from-purple-400 to-indigo-500',
++  },
++  blue: {
++    card: 'from-white to-blue-50 border-blue-200',
++    icon: 'bg-gradient-to-br from-blue-400 to-sky-500',
++  },
++  pink: {
++    card: 'from-white to-pink-50 border-pink-200',
++    icon: 'bg-gradient-to-br from-pink-400 to-rose-500',
++  },
++} as const;
++
++export type DashboardModuleCardTheme = keyof typeof THEMES;
 +
 +type DashboardModuleCardProps = {
 +  icon: string;
 +  title: string;
 +  description: string;
-+  accentClassName: string;
++  theme: DashboardModuleCardTheme;
 +  onClick: () => void;
 +};
 +
 +/** One clickable summary card on the admin dashboard's module menu. */
-+export default function DashboardModuleCard({ icon, title, description, accentClassName, onClick }: DashboardModuleCardProps) {
++export default function DashboardModuleCard({ icon, title, description, theme, onClick }: DashboardModuleCardProps) {
++  const palette = THEMES[theme];
++
 +  return (
 +    <button
 +      type="button"
 +      onClick={onClick}
-+      className="group text-left bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:border-gray-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-400"
++      className={`group flex items-center gap-3 text-left bg-gradient-to-br ${palette.card} p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400`}
 +    >
-+      <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl mb-4 ${accentClassName}`}>
++      <div className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center text-xl text-white shadow-sm ${palette.icon}`}>
 +        <span aria-hidden="true">{icon}</span>
 +      </div>
-+      <h3 className="text-lg font-bold text-gray-900 mb-1">{title}</h3>
-+      <p className="text-sm text-gray-500 leading-snug">{description}</p>
-+      <span className="mt-4 flex items-center gap-1 text-xs font-bold text-blue-600 group-hover:gap-2 transition-all">
-+        Buka modul <span aria-hidden="true">→</span>
-+      </span>
++      <div className="min-w-0">
++        <h3 className="text-sm font-bold text-gray-900 leading-tight">{title}</h3>
++        <p className="text-xs text-gray-500 leading-snug truncate">{description}</p>
++      </div>
 +    </button>
 +  );
 +}
++
 diff --git a/src/components/admin/InventoryPanel.tsx b/src/components/admin/InventoryPanel.tsx
 new file mode 100644
 index 0000000..2b10033
