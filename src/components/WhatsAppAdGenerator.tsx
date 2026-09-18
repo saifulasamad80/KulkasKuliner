@@ -18,32 +18,32 @@ type WhatsAppAdGeneratorProps = {
 function getAudienceMoment(hour: number, dayName: string) {
   if (hour >= 4 && hour < 11) {
     return {
-      headline: `${getTimeGreeting(hour)}! Sebelum hari makin padat, siapin stok makan praktis buat ${dayName}.`,
-      urgency: "Ambil keputusan dari sekarang—nanti saat mulai lapar, tinggal masak tanpa perlu keluar cari makan.",
-      action: "Cek menu pagi ini dan amankan stok yang paling cocok buat aktivitas hari ini.",
+      headline: `${getTimeGreeting(hour)}! Siapin stok makan buat ${dayName}, yuk.`,
+      urgency: "Frozen food enak, tinggal masak.",
+      action: "Cek menu dan pesan sekarang.",
     };
   }
 
   if (hour >= 11 && hour < 15) {
     return {
-      headline: `${getTimeGreeting(hour)}! Lagi butuh makan enak yang nggak makan waktu?`,
-      urgency: "Pas energi dan fokus lagi kebagi, menu praktis bikin waktu istirahat tetap nyaman tanpa mikir panjang.",
-      action: "Pilih sekarang—biar urusan makan hari ini langsung beres.",
+      headline: `${getTimeGreeting(hour)}! Lagi lapar tapi nggak mau ribet?`,
+      urgency: "Pilih menu, masak sebentar, langsung makan.",
+      action: "Pilih menu buat makan hari ini.",
     };
   }
 
   if (hour >= 15 && hour < 19) {
     return {
-      headline: `${getTimeGreeting(hour)}! Energi mulai turun? Jangan sampai makan malam berujung pesan seadanya.`,
-      urgency: "Ini momen yang pas buat siapin menu malam sebelum rasa lapar bikin pilihan jadi terburu-buru.",
-      action: "Lihat stok yang tersedia dan amankan menu favorit sebelum jam makan malam.",
+      headline: `${getTimeGreeting(hour)}! Siapin menu makan malam dari sekarang.`,
+      urgency: "Biar lapar nanti tinggal masak.",
+      action: "Cek stok dan amankan menu favorit.",
     };
   }
 
   return {
-    headline: `${getTimeGreeting(hour)}! Besok mau lebih siap tanpa drama soal makan?`,
-    urgency: "Siapkan stok malam ini—besok tinggal ambil dari freezer saat waktu dan energi lagi terbatas.",
-    action: "Pilih stok untuk besok sekarang, supaya pagi nggak mulai hari dengan keputusan yang ribet.",
+    headline: `${getTimeGreeting(hour)}! Besok mau makan praktis?`,
+    urgency: "Stok malam ini, besok tinggal masak.",
+    action: "Pilih stok buat besok.",
   };
 }
 
@@ -64,22 +64,22 @@ function createAdvertisement(products: Product[], generation: number) {
 
   const openings = [
     audienceMoment.headline,
-    `${greeting}! Freezer kosong jangan dibiarin sampai lapar datang, nih.`,
-    `${greeting}! Waktunya siapin makanan enak tanpa bikin fokus hari ini buyar.`,
-    `${greeting}! Ada stok frozen food premium buat nemenin ritme harian yang makin padat.`,
+    `${greeting}! Freezer kosong? Isi stok, yuk.`,
+    `${greeting}! Mau makan enak tanpa ribet?`,
+    `${greeting}! Stok frozen food siap buat hari ini.`,
   ];
   const callsToAction = [
     audienceMoment.action,
-    "Pesan sekarang, kurir Instan/Sameday siap jalan dari Jakarta Timur.",
-    "Chat sekarang, pilih menu yang pas, lalu lanjutkan aktivitas tanpa urusan makan yang berlarut.",
-    "Klik katalog, pilih menu favorit, dan bereskan stok sebelum nanti lupa.",
+    "Pesan sekarang. Kurir siap jalan dari Jakarta Timur.",
+    "Chat sekarang, pilih menu, beres.",
+    "Klik katalog dan pilih favoritmu.",
   ];
 
   const featuredText = featuredProducts.length > 0
-    ? ["\nPilihan yang lagi siap dipesan:", ...featuredProducts.map(formatProductLine)].join("\n")
-    : "\nKatalog lagi di-update. Chat kami buat cek menu yang tersedia hari ini.";
+    ? ["\nMenu siap:", ...featuredProducts.map(formatProductLine)].join("\n")
+    : "\nMenu sedang di-update. Chat kami buat cek stok.";
   const lowStockText = lowStockProducts.length > 0
-    ? `\n\n⚡ *Stok menipis:* ${lowStockProducts.slice(0, 2).map(getProductLabel).join(" dan ")}. Kalau memang cocok, lebih aman diamankan sekarang sebelum pilihan ini habis.`
+    ? `\n⚡ Stok terbatas: ${lowStockProducts.slice(0, 2).map(getProductLabel).join(" dan ")}.`
     : "";
   const rotation = rotationSeed % openings.length;
 
@@ -88,14 +88,11 @@ function createAdvertisement(products: Product[], generation: number) {
     openings[rotation],
     "",
     audienceMoment.urgency,
-    "Frozen food premium buat stok dapur, bekal keluarga, atau makan praktis kapan aja.",
     featuredText,
     lowStockText,
     "",
     callsToAction[rotation],
-    siteUrl,
-    "",
-    "#FrozenFood #KulkasKuliner #JakartaTimur",
+    `👉 ${siteUrl}`,
   ].join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
@@ -141,7 +138,7 @@ export default function WhatsAppAdGenerator({ products }: WhatsAppAdGeneratorPro
           </div>
           <h2 className="text-xl font-black text-gray-900 sm:text-2xl">Generator Iklan WhatsApp</h2>
           <p className="mt-1 max-w-2xl text-sm text-gray-600">
-            Bikin copy iklan baru berdasarkan jam Jakarta, hari, dan kondisi stok. Tinggal edit kalau perlu lalu share.
+            Copy singkat berdasarkan jam Jakarta dan stok aktif. Tinggal share.
           </p>
         </div>
         <button
@@ -163,7 +160,7 @@ export default function WhatsAppAdGenerator({ products }: WhatsAppAdGeneratorPro
             id="whatsapp-ad-copy"
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            rows={13}
+            rows={10}
             disabled={!message}
             className="w-full resize-y rounded-xl border border-gray-300 bg-white p-4 text-sm leading-6 text-gray-800 shadow-inner outline-none transition-shadow focus:border-green-500 focus:ring-2 focus:ring-green-200 disabled:cursor-wait disabled:bg-gray-50"
             aria-label="Preview teks iklan WhatsApp"
