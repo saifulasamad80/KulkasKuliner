@@ -1,4 +1,4 @@
-import type { Product } from '@/lib/types';
+import type { FavoriteMenu, Product } from '@/lib/types';
 
 export const JAKARTA_TIME_ZONE = 'Asia/Jakarta';
 
@@ -59,6 +59,25 @@ export function selectRotatingProducts<T>(candidates: T[], rotationSeed: number,
   if (candidates.length === 0) return [];
   const length = Math.min(count, candidates.length);
   return Array.from({ length }, (_, index) => candidates[(rotationSeed + index) % candidates.length]);
+}
+
+export function getFavoriteProducts(favoriteMenus: FavoriteMenu[], onlyWithImages = false) {
+  return favoriteMenus
+    .map((menu) => menu.products.find((product) => product.is_active && product.stock > 0 && (!onlyWithImages || Boolean(product.image_url?.trim()))))
+    .filter((product): product is Product => Boolean(product))
+    .slice(0, 3);
+}
+
+export function getFavoriteStockText(favoriteMenus: FavoriteMenu[]) {
+  const available = favoriteMenus.filter((menu) => menu.stock > 0);
+  if (available.length === 0) return 'Stok menu favorit sedang habis—cek katalog untuk pilihan yang masih tersedia.';
+
+  const limited = available.filter((menu) => menu.stock <= 5);
+  if (limited.length > 0) {
+    return `Stok favorit terbatas: ${limited.slice(0, 3).map((menu) => `${menu.label} (sisa ${menu.stock})`).join(', ')}.`;
+  }
+
+  return `Menu favorit masih tersedia: ${available.slice(0, 3).map((menu) => `${menu.label} (${menu.stock} stok)`).join(', ')}.`;
 }
 
 /** Falls back to the production URL during server-side rendering. */

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { hasAdminSession } from '@/lib/admin-session';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import type { OrderSnapshotItem, Product } from '@/lib/types';
+import { getFavoriteMenus } from '@/lib/favorite-menus';
 
 type AdminOrder = {
   id: string;
@@ -101,12 +102,14 @@ export async function GET() {
         ? total + Number(order.total_amount || 0)
         : total;
     }, 0);
+    const favoriteMenus = await getFavoriteMenus((products ?? []) as unknown as Product[]);
 
     return NextResponse.json(
       {
         orders: (orders ?? []) as unknown as AdminOrder[],
         products: (products ?? []) as unknown as Product[],
         totalRevenue,
+        favoriteMenus,
       },
       { headers: { 'Cache-Control': 'no-store' } }
     );

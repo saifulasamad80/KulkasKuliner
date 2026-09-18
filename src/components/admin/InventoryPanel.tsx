@@ -71,7 +71,8 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
     }
     setIsSaving(true);
     try {
-      await updateProduct(id, {
+      const editedProduct = products.find((product) => product.id === id);
+      const input: ProductInput = {
         name: editForm.value.name,
         price: editForm.value.price,
         stock: editForm.value.stock,
@@ -79,8 +80,13 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
         description: editForm.value.description,
         menu_id: editForm.value.menu_id,
         variant_name: editForm.value.variant_name || null,
-        menu_name: editForm.value.menu_name || null,
-      });
+      };
+      // Menu induk cuma boleh berubah lewat editor varian. Edit produk biasa
+      // jangan mengirim menu_name kosong karena itu akan melepas menu_id lama.
+      if (editedProduct?.variant_name) {
+        input.menu_name = editForm.value.menu_name || null;
+      }
+      await updateProduct(id, input);
       setEditingId(null);
       await editForm.cleanUpAfterSave();
     } catch (error) {

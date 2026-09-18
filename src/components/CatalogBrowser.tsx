@@ -25,7 +25,7 @@ function matchesCategory(product: Product, category: string) {
   return true;
 }
 
-export default function CatalogBrowser({ products }: { products: Product[] }) {
+export default function CatalogBrowser({ products, excludedMenuKeys = [] }: { products: Product[]; excludedMenuKeys?: string[] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('Semua');
   const [liveProducts, setLiveProducts] = useState(products);
@@ -44,7 +44,10 @@ export default function CatalogBrowser({ products }: { products: Product[] }) {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const grouped = useMemo(() => groupProducts(liveProducts), [liveProducts]);
+  const grouped = useMemo(() => {
+    const excluded = new Set(excludedMenuKeys);
+    return groupProducts(liveProducts.filter((product) => !excluded.has(product.menu_id || `product:${product.id}`)));
+  }, [excludedMenuKeys, liveProducts]);
   const categoryMeta = [
     { id: 'Semua', label: 'Semua', icon: '✦' }, { id: 'Pasta', label: 'Pasta & Pizza', icon: '🍕' }, { id: 'Kebab', label: 'Kebab', icon: '🌯' },
     { id: 'Durian', label: 'Durian', icon: '🥭' }, { id: 'Pempek', label: 'Pempek', icon: '🍽️' }, { id: 'Lauk & Cemilan', label: 'Lauk & Cemilan', icon: '🍱' },

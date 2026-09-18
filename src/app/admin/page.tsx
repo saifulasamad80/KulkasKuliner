@@ -17,7 +17,7 @@ type ModuleKey = 'pesanan' | 'menu' | 'iklan';
 export default function AdminDashboard() {
   const { isAuthenticated, isCheckingAuth, isVerifying, pinInput, setPinInput, login, logout } = useAdminAuth();
   const {
-    orders, products, totalRevenue, isLoading,
+    orders, products, totalRevenue, favoriteMenus, isLoading,
     createProduct, updateProduct, updateOrderStatus, toggleProductActive,
   } = useAdminData(isAuthenticated);
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
@@ -122,7 +122,7 @@ export default function AdminDashboard() {
             {activeModule === 'iklan' && (
               <DashboardModule title="Modul Iklan" subtitle="Siapkan materi promosi dari data katalog yang sedang aktif.">
                 <WhatsAppAdGenerator products={products} />
-                <SocialContentGenerator products={products} />
+                <SocialContentGenerator products={products} favoriteMenus={favoriteMenus} />
               </DashboardModule>
             )}
           </section>

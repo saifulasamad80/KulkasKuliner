@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { Product } from "@/lib/types";
+import type { FavoriteMenu, Product } from "@/lib/types";
 import {
   getAvailableProducts,
+  getFavoriteProducts,
+  getFavoriteStockText,
   getCatalogUrl,
   getJakartaTimeContext,
   getProductLabel,
@@ -12,7 +14,7 @@ import {
   type TimeContext,
 } from "@/lib/marketing";
 
-type SocialContentGeneratorProps = { products: Product[] };
+type SocialContentGeneratorProps = { products: Product[]; favoriteMenus?: FavoriteMenu[] };
 type ContentMode = "carousel" | "video";
 type AudienceMoment = { mindset: string; hook: string; urgency: string; cta: string };
 
@@ -49,7 +51,9 @@ function getAudienceMoment(hour: number, dayName: string): AudienceMoment {
   };
 }
 
-function selectProducts(products: Product[], generation: number, onlyWithImages = false) {
+function selectProducts(products: Product[], favoriteMenus: FavoriteMenu[], generation: number, onlyWithImages = false) {
+  const favoriteProducts = getFavoriteProducts(favoriteMenus, onlyWithImages);
+  if (favoriteProducts.length > 0) return favoriteProducts;
   const availableProducts = getAvailableProducts(products);
   const candidates = onlyWithImages
     ? availableProducts.filter((product) => Boolean(product.image_url?.trim()))
@@ -60,7 +64,8 @@ function selectProducts(products: Product[], generation: number, onlyWithImages 
   return selectRotatingProducts(candidates, rotationSeed);
 }
 
-function getStockFomo(products: Product[]) {
+function getStockFomo(products: Product[], favoriteMenus: FavoriteMenu[]) {
+  if (favoriteMenus.length > 0) return getFavoriteStockText(favoriteMenus);
   const lowStockProducts = getAvailableProducts(products).filter((product) => product.stock <= 5);
   return lowStockProducts.length > 0
     ? `⚡ Stok menipis: ${lowStockProducts.slice(0, 2).map(getProductLabel).join(" dan ")}. Kalau memang cocok, lebih aman diamankan sekarang sebelum pilihan ini habis.`
@@ -69,20 +74,20 @@ function getStockFomo(products: Product[]) {
 
 function createCommonCopy(context: TimeContext, audienceMoment: AudienceMoment, productNames: string, stockFomo: string, catalogUrl: string) {
   const greeting = getGreeting(context.hour);
-  const caption = `🍽️ ${greeting}!\n\n${audienceMoment.hook}\n\n${audienceMoment.urgency}\n\nFrozen food premium buat stok dapur, bekal keluarga, atau makan praktis tanpa bikin fokus hari ini buyar.\n\n${stockFomo}\n\n${audienceMoment.cta}\n${catalogUrl}`;
+  const caption = `🍽️ ${greeting}! ${audienceMoment.hook}\n\nFavorit pelanggan: ${productNames}.\n${stockFomo}\n\n${audienceMoment.cta}\n${catalogUrl}`;
   const story = `${audienceMoment.hook}\n\n${productNames}\n\n${stockFomo}\n\nCek katalog → link di bio\n${catalogUrl}`;
   return { caption, story };
 }
 
-function createSocialContent(products: Product[], generation: number, mode: ContentMode) {
+function createSocialContent(products: Product[], favoriteMenus: FavoriteMenu[], generation: number, mode: ContentMode) {
   const now = new Date();
   const context = getJakartaTimeContext(now);
   const availableProducts = getAvailableProducts(products);
   const audienceMoment = getAudienceMoment(context.hour, context.dayName);
-  const selectedProducts = selectProducts(products, generation, mode === "carousel");
-  const fallbackProducts = selectedProducts.length > 0 ? selectedProducts : selectProducts(products, generation);
+  const selectedProducts = selectProducts(products, favoriteMenus, generation, mode === "carousel");
+  const fallbackProducts = selectedProducts.length > 0 ? selectedProducts : selectProducts(products, favoriteMenus, generation);
   const productNames = fallbackProducts.length > 0 ? fallbackProducts.map(getProductLabel).join(" dan ") : "menu frozen food yang tersedia";
-  const stockFomo = getStockFomo(products);
+  const stockFomo = getStockFomo(products, favoriteMenus);
   const catalogUrl = getCatalogUrl();
   const { caption, story } = createCommonCopy(context, audienceMoment, productNames, stockFomo, catalogUrl);
 
@@ -157,7 +162,7 @@ function getFileExtension(contentType: string | null, imageUrl: string) {
     : "jpg";
 }
 
-export default function SocialContentGenerator({ products }: SocialContentGeneratorProps) {
+export default function SocialContentGenerator({ products, favoriteMenus = [] }: SocialContentGeneratorProps) {
   const [generation, setGeneration] = useState(0);
   const [mode, setMode] = useState<ContentMode>("carousel");
   const [generatedMode, setGeneratedMode] = useState<ContentMode | null>(null);
@@ -175,8 +180,8 @@ export default function SocialContentGenerator({ products }: SocialContentGenera
     const nextGeneration = generation + 1;
     setGeneration(nextGeneration);
     setGeneratedMode(mode);
-    setContent(createSocialContent(products, nextGeneration, mode));
-    setPreviewProducts(selectProducts(products, nextGeneration, mode === "carousel"));
+    setContent(createSocialContent(products, favoriteMenus, nextGeneration, mode));
+    setPreviewProducts(selectProducts(products, favoriteMenus, nextGeneration, mode === "carousel"));
     setCopied(false);
   };
 

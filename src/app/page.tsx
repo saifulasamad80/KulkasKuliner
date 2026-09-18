@@ -3,7 +3,9 @@ import HeaderCart from '@/components/HeaderCart';
 import FloatingCart from '@/components/FloatingCart';
 import PwaInstallButton from '@/components/PwaInstallButton';
 import CatalogBrowser from '@/components/CatalogBrowser';
+import FavoriteMenusSection from '@/components/FavoriteMenusSection';
 import type { Product } from '@/lib/types';
+import { getFavoriteMenus } from '@/lib/favorite-menus';
 
 export const revalidate = 60;
 
@@ -27,6 +29,8 @@ export default async function Home() {
     products = (legacyResult.data ?? []) as Product[];
     error = legacyResult.error;
   }
+
+  const favoriteMenus = await getFavoriteMenus(products);
 
   if (error) {
     console.error("Gagal menarik data produk:", error);
@@ -107,7 +111,10 @@ export default async function Home() {
               <span className="text-4xl">🧊</span><p className="mt-4 text-lg font-black text-[#171717]">Freezer lagi diberesin</p><p className="mt-1 text-sm font-medium text-[#81766e]">Semua produk sedang habis atau diarsipkan.</p>
             </div>
           ) : (
-            <CatalogBrowser products={products as Product[]} />
+            <>
+              <FavoriteMenusSection favoriteMenus={favoriteMenus} />
+              <CatalogBrowser products={products as Product[]} excludedMenuKeys={favoriteMenus.map((menu) => menu.key)} />
+            </>
           )}
         </div>
       </section>

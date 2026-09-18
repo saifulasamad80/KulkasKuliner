@@ -115,6 +115,19 @@ export async function PATCH(
     return NextResponse.json({ product: data });
   } catch (error) {
     console.error('Produk gagal diperbarui:', error);
-    return NextResponse.json({ error: 'Produk gagal diperbarui.' }, { status: 502 });
+    const databaseError = error as { code?: string; message?: string };
+    if (databaseError?.code === '23505') {
+      return NextResponse.json({ error: 'Nama menu sudah dipakai. Gunakan nama menu lain.' }, { status: 409 });
+    }
+    if (databaseError?.code === '23503') {
+      return NextResponse.json({ error: 'Menu induk tidak ditemukan. Muat ulang dashboard lalu coba lagi.' }, { status: 409 });
+    }
+    if (databaseError?.code === 'PGRST116') {
+      return NextResponse.json({ error: 'Produk tidak ditemukan. Muat ulang dashboard lalu coba lagi.' }, { status: 404 });
+    }
+    if (databaseError?.code === '42P01' || databaseError?.code === '42703') {
+      return NextResponse.json({ error: 'Struktur database katalog belum lengkap. Jalankan migration katalog terlebih dahulu.' }, { status: 503 });
+    }
+    return NextResponse.json({ error: 'Produk gagal diperbarui. Cek koneksi database atau muat ulang dashboard.' }, { status: 502 });
   }
 }

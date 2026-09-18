@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { OrderSnapshotItem, Product } from '@/lib/types';
+import type { FavoriteMenu, OrderSnapshotItem, Product } from '@/lib/types';
 
 export type OrderItem = {
   id: string;
@@ -26,6 +26,7 @@ type AdminDataResponse = {
   orders: Order[];
   products: Product[];
   totalRevenue: number;
+  favoriteMenus: FavoriteMenu[];
 };
 
 export type ProductInput = {
@@ -74,6 +75,7 @@ export function useAdminData(enabled: boolean) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
+  const [favoriteMenus, setFavoriteMenus] = useState<FavoriteMenu[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -84,6 +86,7 @@ export function useAdminData(enabled: boolean) {
     setOrders(data.orders);
     setProducts(data.products);
     setTotalRevenue(Number(data.totalRevenue) || 0);
+    setFavoriteMenus(Array.isArray(data.favoriteMenus) ? data.favoriteMenus : []);
   }, []);
 
   useEffect(() => {
@@ -152,6 +155,7 @@ export function useAdminData(enabled: boolean) {
     orders,
     products,
     totalRevenue,
+    favoriteMenus,
     isLoading,
     fetchData,
     createProduct,

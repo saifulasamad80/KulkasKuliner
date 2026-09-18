@@ -19,6 +19,15 @@ export type Menu = {
   is_active: boolean;
 };
 
+export type FavoriteMenu = {
+  key: string;
+  label: string;
+  products: Product[];
+  soldQuantity: number;
+  stock: number;
+  isFallback: boolean;
+};
+
 export function getProductMenu(product: Product) {
   return Array.isArray(product.menus) ? product.menus[0] ?? null : product.menus ?? null;
 }
