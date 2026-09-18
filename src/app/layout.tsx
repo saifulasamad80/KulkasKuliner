@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 // INJEKSI WARNA TEMA HP (FOODDASH RED)
 export const viewport: Viewport = {
   themeColor: '#DC2626',
+  viewportFit: 'cover',
 };
 
 export const metadata: Metadata = {
@@ -23,6 +24,9 @@ export const metadata: Metadata = {
   title: "KulkasKuliner | Agen Frozen Food Premium Jakarta Timur",
   description: "Distributor Frozen Food Premium & Praktis. Solusi bekal keluarga dan stok dapur harian Anda. Pesan sekarang, kurir instan langsung jalan!",
   manifest: "/manifest.json",
+  icons: {
+    apple: "/icon-192.png",
+  },
   openGraph: {
     title: "KulkasKuliner Jakarta Timur",
     description: "Sedia Pempek, Durian, Bebek Bumbu Hitam, dan aneka Frozen Food premium. Siap antar Instan/Sameday!",

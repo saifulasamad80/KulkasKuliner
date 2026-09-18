@@ -201,7 +201,7 @@ export default function CartPage() {
 
   if (syncingStock) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4">
         <h1 className="text-xl font-bold text-gray-600 animate-pulse">Menyinkronkan stok gudang...</h1>
       </div>
     );
@@ -209,7 +209,7 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-[100dvh] bg-gray-50 flex flex-col items-center justify-center p-4">
         <div className="bg-red-50 p-6 rounded-full mb-4">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -224,7 +224,7 @@ export default function CartPage() {
   }
 
   return (
-    <main className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-50">
+    <main className="max-w-4xl mx-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6 lg:p-8 min-h-[100dvh] bg-gray-50">
       <div className="flex items-center justify-between mb-8 border-b border-gray-200 pb-4">
         <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Checkout</h1>
         <Link href="/#katalog" className="text-red-600 font-semibold hover:underline text-sm">
@@ -287,7 +287,7 @@ export default function CartPage() {
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">No. WhatsApp</label>
-              <input type="tel" required 
+              <input type="tel" inputMode="tel" autoComplete="tel" required
                 className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all" 
                 value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})}
                 placeholder="08123456789"
@@ -306,7 +306,7 @@ export default function CartPage() {
 
                <div className="relative">
                  <label className="block text-sm font-semibold text-gray-700 mb-1">Kode Pos <span className="text-red-500 font-normal text-xs">(Ketik untuk Auto-Complete)</span></label>
-                 <input type="text" maxLength={5} required 
+                  <input type="text" inputMode="numeric" autoComplete="postal-code" maxLength={5} required
                    className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all font-mono font-bold tracking-widest" 
                    value={kodePos} onChange={handleKodePosChange}
                    placeholder="13540"
@@ -329,17 +329,17 @@ export default function CartPage() {
                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Kelurahan</label>
-                    <input type="text" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kelurahan} onChange={(e) => setKelurahan(e.target.value)} placeholder="Kelurahan" />
+                   <input type="text" autoComplete="address-level4" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-base sm:text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kelurahan} onChange={(e) => setKelurahan(e.target.value)} placeholder="Kelurahan" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Kecamatan</label>
-                    <input type="text" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kecamatan} onChange={(e) => setKecamatan(e.target.value)} placeholder="Kecamatan" />
+                   <input type="text" autoComplete="address-level3" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-base sm:text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kecamatan} onChange={(e) => setKecamatan(e.target.value)} placeholder="Kecamatan" />
                   </div>
                </div>
 
                <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1">Kota/Kabupaten</label>
-                  <input type="text" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kota} onChange={(e) => setKota(e.target.value)} placeholder="Kota/Kabupaten" />
+                   <input type="text" autoComplete="address-level2" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-base sm:text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kota} onChange={(e) => setKota(e.target.value)} placeholder="Kota/Kabupaten" />
                </div>
             </div>
 

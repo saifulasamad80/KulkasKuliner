@@ -32,7 +32,8 @@ export default function PwaInstallButton() {
     window.addEventListener('appinstalled', handleInstalled);
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
-    const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIos = /iphone|ipad|ipod/.test(userAgent) || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
     const isInStandaloneMode = (window.navigator as IOSNavigator).standalone === true;
     if (isIos && !isInStandaloneMode) {
       window.setTimeout(() => setIsIosPrompt(true), 0);
