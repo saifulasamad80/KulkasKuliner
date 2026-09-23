@@ -4,6 +4,7 @@ export type ProductFormValue = {
   name: string;
   price: number;
   stock: number;
+  cost_price: number;
   image_url: string;
   description: string;
   menu_id: string | null;
@@ -15,6 +16,7 @@ export const emptyProductForm: ProductFormValue = {
   name: '',
   price: 0,
   stock: 0,
+  cost_price: 0,
   image_url: '',
   description: '',
   menu_id: null,

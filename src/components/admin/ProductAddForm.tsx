@@ -19,7 +19,7 @@ const inputClass = 'min-h-12 w-full rounded-xl border border-slate-300 bg-white 
 const labelClass = 'mb-1.5 block text-sm font-black text-slate-800';
 
 function createVariant(id: number): VariantDraft {
-  return { id, variant_name: '', price: 0, stock: 0 };
+  return { id, variant_name: '', price: 0, stock: 0, cost_price: 0 };
 }
 
 export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmit, onUploadImage }: ProductAddFormProps) {
@@ -61,7 +61,7 @@ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmi
     }
 
     const menuName = form.value.menu_name.trim();
-    const normalizedVariants = variants.map(({ variant_name, price, stock }) => ({ variant_name: variant_name.trim(), price, stock }));
+    const normalizedVariants = variants.map(({ variant_name, price, stock, cost_price }) => ({ variant_name: variant_name.trim(), price, stock, cost_price }));
     const uniqueNames = new Set(normalizedVariants.map((variant) => variant.variant_name.toLocaleLowerCase('id-ID')));
 
     if (menuName.length < 2) return alert('Nama menu wajib diisi minimal 2 huruf.');
@@ -125,6 +125,7 @@ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmi
             <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
               <label className="block"><span className={labelClass}>Harga jual</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" required min="1" inputMode="numeric" placeholder="25000" className={`${inputClass} pl-10`} value={form.value.price || ''} onChange={(event) => form.setField('price', Number(event.target.value))} /></span></label>
               <label className="block"><span className={labelClass}>Stok tersedia</span><input type="number" required min="0" inputMode="numeric" placeholder="0" className={inputClass} value={form.value.stock} onChange={(event) => form.setField('stock', Number(event.target.value))} /></label>
+              <label className="block"><span className={labelClass}>Modal (harga beli dari distributor) <span className="font-semibold text-slate-400">(opsional)</span></span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="0" inputMode="numeric" placeholder="18000" className={`${inputClass} pl-10`} value={form.value.cost_price || ''} onChange={(event) => form.setField('cost_price', Number(event.target.value))} /></span><span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">Dipakai buat hitung keuntungan bersih di Modul Laporan.</span></label>
             </div>
           </section>
         ) : (
@@ -137,10 +138,11 @@ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmi
               {variants.map((variant, index) => (
                 <div key={variant.id} className="rounded-2xl border border-violet-200 bg-white p-3.5 shadow-sm sm:p-4">
                   <div className="mb-3 flex items-center justify-between gap-3"><p className="text-sm font-black text-violet-800">Varian {index + 1}</p>{variants.length > 2 && <button type="button" onClick={() => setVariants((current) => current.filter((item) => item.id !== variant.id))} className="min-h-10 rounded-xl bg-red-50 px-3 text-sm font-black text-red-600 hover:bg-red-100">Hapus</button>}</div>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,.7fr)]">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,.85fr)_minmax(0,.6fr)_minmax(0,.85fr)]">
                     <label className="block"><span className={labelClass}>Nama varian</span><input type="text" required maxLength={120} placeholder="Contoh: Isi 2" className={inputClass} value={variant.variant_name} onChange={(event) => updateVariant(variant.id, 'variant_name', event.target.value)} /></label>
-                    <label className="block"><span className={labelClass}>Harga</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" required min="1" inputMode="numeric" placeholder="25000" className={`${inputClass} pl-10`} value={variant.price || ''} onChange={(event) => updateVariant(variant.id, 'price', Number(event.target.value))} /></span></label>
+                    <label className="block"><span className={labelClass}>Harga jual</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" required min="1" inputMode="numeric" placeholder="25000" className={`${inputClass} pl-10`} value={variant.price || ''} onChange={(event) => updateVariant(variant.id, 'price', Number(event.target.value))} /></span></label>
                     <label className="block"><span className={labelClass}>Stok</span><input type="number" required min="0" inputMode="numeric" placeholder="0" className={inputClass} value={variant.stock} onChange={(event) => updateVariant(variant.id, 'stock', Number(event.target.value))} /></label>
+                    <label className="block"><span className={labelClass}>Modal <span className="font-semibold text-slate-400">(opsional)</span></span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="0" inputMode="numeric" placeholder="18000" className={`${inputClass} pl-10`} value={variant.cost_price || ''} onChange={(event) => updateVariant(variant.id, 'cost_price', Number(event.target.value))} /></span></label>
                   </div>
                 </div>
               ))}

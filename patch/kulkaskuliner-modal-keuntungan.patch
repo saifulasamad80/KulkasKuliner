@@ -1,0 +1,481 @@
+diff --git a/src/app/api/admin/data/route.ts b/src/app/api/admin/data/route.ts
+index 94c1a5d..1c9ccf5 100755
+--- a/src/app/api/admin/data/route.ts
++++ b/src/app/api/admin/data/route.ts
+@@ -35,7 +35,7 @@ function readDashboardData() {
+       .limit(50),
+     admin
+       .from('products')
+-      .select('id, name, price, stock, image_url, is_active, description, menu_id, variant_name, menus(id, name, description, image_url, is_active)')
++      .select('id, name, price, stock, cost_price, image_url, is_active, description, menu_id, variant_name, menus(id, name, description, image_url, is_active)')
+       .order('name', { ascending: true }),
+     admin.from('orders').select('total_amount, status'),
+   ]);
+diff --git a/src/app/api/admin/products/[id]/route.ts b/src/app/api/admin/products/[id]/route.ts
+index c6c0f8d..eac7291 100755
+--- a/src/app/api/admin/products/[id]/route.ts
++++ b/src/app/api/admin/products/[id]/route.ts
+@@ -14,6 +14,7 @@ type ProductPatch = {
+   name?: string;
+   price?: number;
+   stock?: number;
++  cost_price?: number;
+   image_url?: string;
+   description?: string;
+   is_active?: boolean;
+@@ -42,6 +43,11 @@ function validatePatch(input: unknown): ProductPatch | null {
+     if (!stock.valid) return null;
+     patch.stock = stock.value;
+   }
++  if ('cost_price' in value) {
++    const costPrice = validateNonNegativeInteger(value.cost_price);
++    if (!costPrice.valid) return null;
++    patch.cost_price = costPrice.value;
++  }
+   if ('image_url' in value) {
+     const imageUrl = normalizeBoundedText(value.image_url, { max: 2_000, requireString: true });
+     if (!imageUrl.valid) return null;
+@@ -108,7 +114,7 @@ export async function PATCH(
+       .from('products')
+       .update(productPatch)
+       .eq('id', id)
+-      .select('id, name, price, stock, image_url, is_active, description, menu_id, variant_name')
++      .select('id, name, price, stock, cost_price, image_url, is_active, description, menu_id, variant_name')
+       .single();
+ 
+     if (error) throw error;
+diff --git a/src/app/api/admin/products/route.ts b/src/app/api/admin/products/route.ts
+index ae1cf9c..0890edd 100755
+--- a/src/app/api/admin/products/route.ts
++++ b/src/app/api/admin/products/route.ts
+@@ -14,6 +14,7 @@ type ProductInput = {
+   name: string;
+   price: number;
+   stock: number;
++  cost_price: number;
+   image_url: string;
+   description?: string;
+   menu_id?: string | null;
+@@ -25,6 +26,7 @@ type VariantInput = {
+   variant_name: string;
+   price: number;
+   stock: number;
++  cost_price: number;
+ };
+ 
+ type VariantMenuInput = {
+@@ -52,8 +54,9 @@ function validateVariantMenu(input: unknown): VariantMenuInput | null {
+     const variantName = validateRequiredText(variant.variant_name, 1, 120);
+     const price = validatePositiveInteger(variant.price);
+     const stock = validateNonNegativeInteger(variant.stock);
+-    if (!variantName.valid || !price.valid || !stock.valid) return null;
+-    variants.push({ variant_name: variantName.value, price: price.value, stock: stock.value });
++    const costPrice = variant.cost_price === undefined ? { valid: true as const, value: 0 } : validateNonNegativeInteger(variant.cost_price);
++    if (!variantName.valid || !price.valid || !stock.valid || !costPrice.valid) return null;
++    variants.push({ variant_name: variantName.value, price: price.value, stock: stock.value, cost_price: costPrice.value });
+   }
+ 
+   const uniqueNames = new Set(variants.map((variant) => variant.variant_name.toLocaleLowerCase('id-ID')));
+@@ -75,13 +78,14 @@ function validateProduct(input: unknown): ProductInput | null {
+   const name = validateRequiredText(value.name, 2, 120);
+   const price = validatePositiveInteger(value.price);
+   const stock = validateNonNegativeInteger(value.stock);
++  const costPrice = value.cost_price === undefined ? { valid: true as const, value: 0 } : validateNonNegativeInteger(value.cost_price);
+   const imageUrl = normalizeBoundedText(value.image_url, { max: 2_000 });
+   const description = normalizeBoundedText(value.description, { max: 500 });
+   const menuId = normalizeNullableText(value.menu_id, { pattern: MENU_ID_PATTERN });
+   const variantName = normalizeNullableText(value.variant_name, { min: 1, max: 120 });
+   const menuName = normalizeNullableText(value.menu_name, { min: 2, max: 120 });
+ 
+-  if (!name.valid || !price.valid || !stock.valid || !imageUrl.valid || !description.valid || !menuId.valid || !variantName.valid || !menuName.valid) {
++  if (!name.valid || !price.valid || !stock.valid || !costPrice.valid || !imageUrl.valid || !description.valid || !menuId.valid || !variantName.valid || !menuName.valid) {
+     return null;
+   }
+ 
+@@ -89,6 +93,7 @@ function validateProduct(input: unknown): ProductInput | null {
+     name: name.value,
+     price: price.value,
+     stock: stock.value,
++    cost_price: costPrice.value,
+     image_url: imageUrl.value,
+     description: description.value,
+     menu_id: menuId.value,
+@@ -139,7 +144,7 @@ export async function POST(request: Request) {
+     const { data, error } = await admin
+       .from('products')
+       .insert({ ...productInput, menu_id: menuId, is_active: true })
+-      .select('id, name, price, stock, image_url, is_active, description, menu_id, variant_name')
++      .select('id, name, price, stock, cost_price, image_url, is_active, description, menu_id, variant_name')
+       .single();
+ 
+     if (error) throw error;
+diff --git a/src/components/admin/InventoryPanel.tsx b/src/components/admin/InventoryPanel.tsx
+index c5ae521..cdbe133 100755
+--- a/src/components/admin/InventoryPanel.tsx
++++ b/src/components/admin/InventoryPanel.tsx
+@@ -90,6 +90,7 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
+         name: editForm.value.name,
+         price: editForm.value.price,
+         stock: editForm.value.stock,
++        cost_price: editForm.value.cost_price,
+         image_url: editForm.value.image_url,
+         description: editForm.value.description,
+         menu_id: editForm.value.menu_id,
+@@ -119,6 +120,7 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
+       name: product.name,
+       price: product.price,
+       stock: product.stock,
++      cost_price: product.cost_price ?? 0,
+       image_url: product.image_url || '',
+       description: product.description || '',
+       menu_id: product.menu_id || null,
+diff --git a/src/components/admin/LaporanPanel.tsx b/src/components/admin/LaporanPanel.tsx
+index f2518be..27a1419 100644
+--- a/src/components/admin/LaporanPanel.tsx
++++ b/src/components/admin/LaporanPanel.tsx
+@@ -40,12 +40,18 @@ export default function LaporanPanel({ products, productSales }: LaporanPanelPro
+     return products
+       .map((product) => {
+         const menu = getProductMenu(product);
++        const sold = productSales[product.id] ?? 0;
++        const hasCostPrice = product.cost_price > 0;
++        const profitPerUnit = product.price - product.cost_price;
+         return {
+           product,
+           label: getProductLabel(product),
+           menuName: menu?.name || '-',
+           status: getStockStatus(product.stock),
+-          sold: productSales[product.id] ?? 0,
++          sold,
++          hasCostPrice,
++          profitPerUnit,
++          totalProfit: hasCostPrice ? profitPerUnit * sold : 0,
+         };
+       })
+       .sort((a, b) => a.product.stock - b.product.stock || a.label.localeCompare(b.label, 'id-ID'));
+@@ -55,6 +61,9 @@ export default function LaporanPanel({ products, productSales }: LaporanPanelPro
+   const menipisCount = rows.filter((row) => row.status === 'menipis').length;
+   const visibleRows = filter === 'semua' ? rows : rows.filter((row) => row.status === filter);
+ 
++  const totalNetProfit = rows.reduce((sum, row) => sum + row.totalProfit, 0);
++  const missingCostPriceCount = rows.filter((row) => !row.hasCostPrice).length;
++
+   const bestSellers = useMemo(
+     () => [...rows].filter((row) => row.sold > 0).sort((a, b) => b.sold - a.sold).slice(0, 5),
+     [rows]
+@@ -65,14 +74,16 @@ export default function LaporanPanel({ products, productSales }: LaporanPanelPro
+       Produk: row.label,
+       'Menu Induk': row.menuName,
+       Harga: row.product.price,
++      Modal: row.hasCostPrice ? row.product.cost_price : '',
+       Stok: row.product.stock,
+       'Status Stok': STATUS_LABEL[row.status],
+       'Terjual (Lunas)': row.sold,
++      'Keuntungan Bersih': row.hasCostPrice ? row.totalProfit : '',
+       'Status Tayang': row.product.is_active ? 'Aktif' : 'Diarsipkan',
+     }));
+ 
+     const worksheet = XLSX.utils.json_to_sheet(exportRows);
+-    worksheet['!cols'] = [{ wch: 28 }, { wch: 20 }, { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 15 }, { wch: 13 }];
++    worksheet['!cols'] = [{ wch: 28 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 15 }, { wch: 16 }, { wch: 13 }];
+     const workbook = XLSX.utils.book_new();
+     XLSX.utils.book_append_sheet(workbook, worksheet, 'Laporan Stok');
+ 
+@@ -83,6 +94,17 @@ export default function LaporanPanel({ products, productSales }: LaporanPanelPro
+ 
+   return (
+     <div>
++      <div className="mb-5 rounded-2xl border border-emerald-200 bg-linear-to-br from-emerald-50 via-white to-white p-4 sm:p-5">
++        <p className="text-xs font-black uppercase tracking-wide text-emerald-700">💰 Keuntungan Bersih (dari pesanan lunas)</p>
++        <p className="mt-1 text-3xl font-black text-emerald-800 sm:text-4xl">Rp {totalNetProfit.toLocaleString('id-ID')}</p>
++        <p className="mt-1.5 text-xs leading-5 text-slate-500">Harga jual dikurangi modal, dikali jumlah terjual (dari seluruh riwayat pesanan lunas).</p>
++        {missingCostPriceCount > 0 && (
++          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
++            ⚠️ {missingCostPriceCount} menu belum diisi modalnya — keuntungan dari menu itu belum ikut terhitung di angka ini. Isi modal lewat Modul Menu (tombol Edit Item) biar makin akurat.
++          </p>
++        )}
++      </div>
++
+       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+           <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">Total Menu</p>
+@@ -157,14 +179,16 @@ export default function LaporanPanel({ products, productSales }: LaporanPanelPro
+         <p className="rounded-xl border border-slate-100 bg-slate-50 p-6 text-center text-sm text-slate-500">Tidak ada menu di kategori ini.</p>
+       ) : (
+         <div className="overflow-x-auto rounded-xl border border-slate-100">
+-          <table className="w-full min-w-[560px] text-left text-sm">
++          <table className="w-full min-w-[720px] text-left text-sm">
+             <thead className="bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+               <tr>
+                 <th className="px-3 py-2.5">Produk</th>
+                 <th className="px-3 py-2.5">Menu Induk</th>
+                 <th className="px-3 py-2.5 text-right">Stok</th>
+                 <th className="px-3 py-2.5">Status</th>
++                <th className="px-3 py-2.5 text-right">Modal</th>
+                 <th className="px-3 py-2.5 text-right">Terjual</th>
++                <th className="px-3 py-2.5 text-right">Untung</th>
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-slate-100">
+@@ -178,7 +202,17 @@ export default function LaporanPanel({ products, productSales }: LaporanPanelPro
+                       {STATUS_LABEL[row.status]}
+                     </span>
+                   </td>
++                  <td className="px-3 py-2.5 text-right text-slate-600">
++                    {row.hasCostPrice ? `Rp ${row.product.cost_price.toLocaleString('id-ID')}` : <span className="text-amber-600">Belum diisi</span>}
++                  </td>
+                   <td className="px-3 py-2.5 text-right text-slate-600">{row.sold}</td>
++                  <td className="px-3 py-2.5 text-right font-black">
++                    {row.hasCostPrice ? (
++                      <span className={row.totalProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}>Rp {row.totalProfit.toLocaleString('id-ID')}</span>
++                    ) : (
++                      <span className="text-slate-400">-</span>
++                    )}
++                  </td>
+                 </tr>
+               ))}
+             </tbody>
+diff --git a/src/components/admin/ProductAddForm.tsx b/src/components/admin/ProductAddForm.tsx
+index 85ba3a4..0846603 100644
+--- a/src/components/admin/ProductAddForm.tsx
++++ b/src/components/admin/ProductAddForm.tsx
+@@ -19,7 +19,7 @@ const inputClass = 'min-h-12 w-full rounded-xl border border-slate-300 bg-white
+ const labelClass = 'mb-1.5 block text-sm font-black text-slate-800';
+ 
+ function createVariant(id: number): VariantDraft {
+-  return { id, variant_name: '', price: 0, stock: 0 };
++  return { id, variant_name: '', price: 0, stock: 0, cost_price: 0 };
+ }
+ 
+ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmit, onUploadImage }: ProductAddFormProps) {
+@@ -61,7 +61,7 @@ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmi
+     }
+ 
+     const menuName = form.value.menu_name.trim();
+-    const normalizedVariants = variants.map(({ variant_name, price, stock }) => ({ variant_name: variant_name.trim(), price, stock }));
++    const normalizedVariants = variants.map(({ variant_name, price, stock, cost_price }) => ({ variant_name: variant_name.trim(), price, stock, cost_price }));
+     const uniqueNames = new Set(normalizedVariants.map((variant) => variant.variant_name.toLocaleLowerCase('id-ID')));
+ 
+     if (menuName.length < 2) return alert('Nama menu wajib diisi minimal 2 huruf.');
+@@ -125,6 +125,7 @@ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmi
+             <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
+               <label className="block"><span className={labelClass}>Harga jual</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" required min="1" inputMode="numeric" placeholder="25000" className={`${inputClass} pl-10`} value={form.value.price || ''} onChange={(event) => form.setField('price', Number(event.target.value))} /></span></label>
+               <label className="block"><span className={labelClass}>Stok tersedia</span><input type="number" required min="0" inputMode="numeric" placeholder="0" className={inputClass} value={form.value.stock} onChange={(event) => form.setField('stock', Number(event.target.value))} /></label>
++              <label className="block"><span className={labelClass}>Modal (harga beli dari distributor) <span className="font-semibold text-slate-400">(opsional)</span></span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="0" inputMode="numeric" placeholder="18000" className={`${inputClass} pl-10`} value={form.value.cost_price || ''} onChange={(event) => form.setField('cost_price', Number(event.target.value))} /></span><span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">Dipakai buat hitung keuntungan bersih di Modul Laporan.</span></label>
+             </div>
+           </section>
+         ) : (
+@@ -137,10 +138,11 @@ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmi
+               {variants.map((variant, index) => (
+                 <div key={variant.id} className="rounded-2xl border border-violet-200 bg-white p-3.5 shadow-sm sm:p-4">
+                   <div className="mb-3 flex items-center justify-between gap-3"><p className="text-sm font-black text-violet-800">Varian {index + 1}</p>{variants.length > 2 && <button type="button" onClick={() => setVariants((current) => current.filter((item) => item.id !== variant.id))} className="min-h-10 rounded-xl bg-red-50 px-3 text-sm font-black text-red-600 hover:bg-red-100">Hapus</button>}</div>
+-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,.7fr)]">
++                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,.85fr)_minmax(0,.6fr)_minmax(0,.85fr)]">
+                     <label className="block"><span className={labelClass}>Nama varian</span><input type="text" required maxLength={120} placeholder="Contoh: Isi 2" className={inputClass} value={variant.variant_name} onChange={(event) => updateVariant(variant.id, 'variant_name', event.target.value)} /></label>
+-                    <label className="block"><span className={labelClass}>Harga</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" required min="1" inputMode="numeric" placeholder="25000" className={`${inputClass} pl-10`} value={variant.price || ''} onChange={(event) => updateVariant(variant.id, 'price', Number(event.target.value))} /></span></label>
++                    <label className="block"><span className={labelClass}>Harga jual</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" required min="1" inputMode="numeric" placeholder="25000" className={`${inputClass} pl-10`} value={variant.price || ''} onChange={(event) => updateVariant(variant.id, 'price', Number(event.target.value))} /></span></label>
+                     <label className="block"><span className={labelClass}>Stok</span><input type="number" required min="0" inputMode="numeric" placeholder="0" className={inputClass} value={variant.stock} onChange={(event) => updateVariant(variant.id, 'stock', Number(event.target.value))} /></label>
++                    <label className="block"><span className={labelClass}>Modal <span className="font-semibold text-slate-400">(opsional)</span></span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="0" inputMode="numeric" placeholder="18000" className={`${inputClass} pl-10`} value={variant.cost_price || ''} onChange={(event) => updateVariant(variant.id, 'cost_price', Number(event.target.value))} /></span></label>
+                   </div>
+                 </div>
+               ))}
+diff --git a/src/components/admin/ProductEditForm.tsx b/src/components/admin/ProductEditForm.tsx
+index 96f8736..422cad5 100644
+--- a/src/components/admin/ProductEditForm.tsx
++++ b/src/components/admin/ProductEditForm.tsx
+@@ -64,6 +64,7 @@ export default function ProductEditForm({ form, uploadingImage, isSaving, isVari
+           <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
+             <label className="block"><span className={labelClass}>Harga jual</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="1" inputMode="numeric" className={`${inputClass} pl-10`} value={form.value.price || ''} onChange={(event) => form.setField('price', Number(event.target.value))} /></span></label>
+             <label className="block"><span className={labelClass}>Stok tersedia</span><input type="number" min="0" inputMode="numeric" className={inputClass} value={form.value.stock} onChange={(event) => form.setField('stock', Number(event.target.value))} /></label>
++            <label className="block"><span className={labelClass}>Modal (harga beli) <span className="font-semibold text-slate-400">(opsional)</span></span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="0" inputMode="numeric" className={`${inputClass} pl-10`} value={form.value.cost_price || ''} onChange={(event) => form.setField('cost_price', Number(event.target.value))} /></span><span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">Dipakai buat hitung keuntungan bersih di Modul Laporan.</span></label>
+           </div>
+         </section>
+ 
+diff --git a/src/components/admin/ProductListItem.tsx b/src/components/admin/ProductListItem.tsx
+index 3598da5..78355fc 100755
+--- a/src/components/admin/ProductListItem.tsx
++++ b/src/components/admin/ProductListItem.tsx
+@@ -63,6 +63,15 @@ export default function ProductListItem({
+                 <span className={`rounded-full px-2.5 py-1 text-xs font-black ${product.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                   SISA: {product.stock}
+                 </span>
++                {product.cost_price > 0 ? (
++                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-black text-emerald-800">
++                    Untung: Rp {(product.price - product.cost_price).toLocaleString('id-ID')}/pcs
++                  </span>
++                ) : (
++                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
++                    Modal belum diisi
++                  </span>
++                )}
+                 {!product.is_active && <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-gray-800 text-white">DIARSIPKAN</span>}
+               </div>
+             </div>
+diff --git a/src/hooks/useAdminData.ts b/src/hooks/useAdminData.ts
+index 777686b..0d41c3c 100755
+--- a/src/hooks/useAdminData.ts
++++ b/src/hooks/useAdminData.ts
+@@ -34,6 +34,7 @@ export type ProductInput = {
+   name: string;
+   price: number;
+   stock: number;
++  cost_price?: number;
+   image_url: string;
+   description: string;
+   menu_id?: string | null;
+@@ -45,6 +46,7 @@ export type ProductVariantInput = {
+   variant_name: string;
+   price: number;
+   stock: number;
++  cost_price: number;
+ };
+ 
+ export type VariantMenuInput = {
+diff --git a/src/hooks/useProductForm.ts b/src/hooks/useProductForm.ts
+index 96c37b6..f00da81 100755
+--- a/src/hooks/useProductForm.ts
++++ b/src/hooks/useProductForm.ts
+@@ -4,6 +4,7 @@ export type ProductFormValue = {
+   name: string;
+   price: number;
+   stock: number;
++  cost_price: number;
+   image_url: string;
+   description: string;
+   menu_id: string | null;
+@@ -15,6 +16,7 @@ export const emptyProductForm: ProductFormValue = {
+   name: '',
+   price: 0,
+   stock: 0,
++  cost_price: 0,
+   image_url: '',
+   description: '',
+   menu_id: null,
+diff --git a/src/lib/types.ts b/src/lib/types.ts
+index 6a3ab6d..652db1b 100755
+--- a/src/lib/types.ts
++++ b/src/lib/types.ts
+@@ -3,6 +3,7 @@ export type Product = {
+   name: string;
+   price: number;
+   stock: number;
++  cost_price: number;
+   image_url: string | null;
+   is_active: boolean;
+   description?: string | null;
+diff --git a/supabase/migrations/20260923_add_product_cost_price.sql b/supabase/migrations/20260923_add_product_cost_price.sql
+new file mode 100644
+index 0000000..66a2220
+--- /dev/null
++++ b/supabase/migrations/20260923_add_product_cost_price.sql
+@@ -0,0 +1,110 @@
++-- Menambahkan kolom modal/harga-beli per produk supaya admin bisa lihat
++-- keuntungan bersih (harga jual - modal), bukan cuma pendapatan kotor.
++-- Default 0 untuk produk lama yang belum diisi modalnya -- ditandai di UI
++-- admin sebagai "modal belum diisi" alih-alih dianggap untung 100%.
++
++alter table public.products add column if not exists cost_price integer not null default 0;
++alter table public.products add constraint products_cost_price_non_negative check (cost_price >= 0);
++
++-- create_variant_menu_atomic perlu terima cost_price per varian juga, jadi
++-- fungsi ini di-replace utuh dengan tambahan kolom itu di validasi + insert.
++create or replace function public.create_variant_menu_atomic(
++  p_menu_name text,
++  p_description text,
++  p_image_url text,
++  p_variants jsonb
++)
++returns jsonb
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  v_menu_id uuid;
++  v_menu_name text := trim(coalesce(p_menu_name, ''));
++  v_description text := trim(coalesce(p_description, ''));
++  v_image_url text := trim(coalesce(p_image_url, ''));
++  v_variant_count integer;
++  v_distinct_variant_count integer;
++begin
++  if length(v_menu_name) < 2 or length(v_menu_name) > 120 then
++    raise exception using errcode = '22023', message = 'Nama menu tidak valid';
++  end if;
++  if length(v_description) > 500 or length(v_image_url) > 2000 then
++    raise exception using errcode = '22023', message = 'Metadata menu tidak valid';
++  end if;
++  if p_variants is null or jsonb_typeof(p_variants) <> 'array' then
++    raise exception using errcode = '22023', message = 'Daftar varian tidak valid';
++  end if;
++
++  select count(*), count(distinct lower(trim(variant_name)))
++  into v_variant_count, v_distinct_variant_count
++  from jsonb_to_recordset(p_variants) as variant(variant_name text, price numeric, stock integer, cost_price numeric);
++
++  if v_variant_count < 2 or v_variant_count > 25 or v_distinct_variant_count <> v_variant_count then
++    raise exception using errcode = '22023', message = 'Varian wajib unik dan berjumlah 2 sampai 25';
++  end if;
++  if exists (
++    select 1
++    from jsonb_to_recordset(p_variants) as variant(variant_name text, price numeric, stock integer, cost_price numeric)
++    where variant_name is null
++      or length(trim(variant_name)) < 1
++      or length(trim(variant_name)) > 120
++      or price is null
++      or price <= 0
++      or price <> trunc(price)
++      or stock is null
++      or stock < 0
++      or coalesce(cost_price, 0) < 0
++      or coalesce(cost_price, 0) <> trunc(coalesce(cost_price, 0))
++  ) then
++    raise exception using errcode = '22023', message = 'Data varian tidak valid';
++  end if;
++
++  -- Serialisasi pembuatan nama menu yang sama, termasuk beda kapitalisasi.
++  perform pg_advisory_xact_lock(hashtextextended(lower(v_menu_name), 0));
++
++  select m.id
++  into v_menu_id
++  from public.menus m
++  where lower(trim(m.name)) = lower(v_menu_name)
++  order by m.created_at
++  limit 1
++  for update;
++
++  if v_menu_id is not null then
++    if exists (select 1 from public.products where menu_id = v_menu_id) then
++      raise exception using errcode = 'P0001', message = 'Menu ini sudah punya produk';
++    end if;
++
++    update public.menus
++    set name = v_menu_name,
++        description = nullif(v_description, ''),
++        image_url = nullif(v_image_url, ''),
++        is_active = true
++    where id = v_menu_id;
++  else
++    insert into public.menus (name, description, image_url, is_active)
++    values (v_menu_name, nullif(v_description, ''), nullif(v_image_url, ''), true)
++    returning id into v_menu_id;
++  end if;
++
++  insert into public.products (name, price, stock, image_url, description, menu_id, variant_name, is_active, cost_price)
++  select
++    v_menu_name,
++    variant.price,
++    variant.stock,
++    v_image_url,
++    v_description,
++    v_menu_id,
++    trim(variant.variant_name),
++    true,
++    coalesce(variant.cost_price, 0)
++  from jsonb_to_recordset(p_variants) as variant(variant_name text, price numeric, stock integer, cost_price numeric);
++
++  return jsonb_build_object('menu_id', v_menu_id, 'variant_count', v_variant_count);
++end;
++$$;
++
++revoke execute on function public.create_variant_menu_atomic(text, text, text, jsonb) from public, anon, authenticated;
++grant execute on function public.create_variant_menu_atomic(text, text, text, jsonb) to service_role;

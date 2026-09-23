@@ -63,6 +63,15 @@ export default function ProductListItem({
                 <span className={`rounded-full px-2.5 py-1 text-xs font-black ${product.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                   SISA: {product.stock}
                 </span>
+                {product.cost_price > 0 ? (
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-black text-emerald-800">
+                    Untung: Rp {(product.price - product.cost_price).toLocaleString('id-ID')}/pcs
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
+                    Modal belum diisi
+                  </span>
+                )}
                 {!product.is_active && <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-gray-800 text-white">DIARSIPKAN</span>}
               </div>
             </div>

@@ -14,6 +14,7 @@ type ProductInput = {
   name: string;
   price: number;
   stock: number;
+  cost_price: number;
   image_url: string;
   description?: string;
   menu_id?: string | null;
@@ -25,6 +26,7 @@ type VariantInput = {
   variant_name: string;
   price: number;
   stock: number;
+  cost_price: number;
 };
 
 type VariantMenuInput = {
@@ -52,8 +54,9 @@ function validateVariantMenu(input: unknown): VariantMenuInput | null {
     const variantName = validateRequiredText(variant.variant_name, 1, 120);
     const price = validatePositiveInteger(variant.price);
     const stock = validateNonNegativeInteger(variant.stock);
-    if (!variantName.valid || !price.valid || !stock.valid) return null;
-    variants.push({ variant_name: variantName.value, price: price.value, stock: stock.value });
+    const costPrice = variant.cost_price === undefined ? { valid: true as const, value: 0 } : validateNonNegativeInteger(variant.cost_price);
+    if (!variantName.valid || !price.valid || !stock.valid || !costPrice.valid) return null;
+    variants.push({ variant_name: variantName.value, price: price.value, stock: stock.value, cost_price: costPrice.value });
   }
 
   const uniqueNames = new Set(variants.map((variant) => variant.variant_name.toLocaleLowerCase('id-ID')));
@@ -75,13 +78,14 @@ function validateProduct(input: unknown): ProductInput | null {
   const name = validateRequiredText(value.name, 2, 120);
   const price = validatePositiveInteger(value.price);
   const stock = validateNonNegativeInteger(value.stock);
+  const costPrice = value.cost_price === undefined ? { valid: true as const, value: 0 } : validateNonNegativeInteger(value.cost_price);
   const imageUrl = normalizeBoundedText(value.image_url, { max: 2_000 });
   const description = normalizeBoundedText(value.description, { max: 500 });
   const menuId = normalizeNullableText(value.menu_id, { pattern: MENU_ID_PATTERN });
   const variantName = normalizeNullableText(value.variant_name, { min: 1, max: 120 });
   const menuName = normalizeNullableText(value.menu_name, { min: 2, max: 120 });
 
-  if (!name.valid || !price.valid || !stock.valid || !imageUrl.valid || !description.valid || !menuId.valid || !variantName.valid || !menuName.valid) {
+  if (!name.valid || !price.valid || !stock.valid || !costPrice.valid || !imageUrl.valid || !description.valid || !menuId.valid || !variantName.valid || !menuName.valid) {
     return null;
   }
 
@@ -89,6 +93,7 @@ function validateProduct(input: unknown): ProductInput | null {
     name: name.value,
     price: price.value,
     stock: stock.value,
+    cost_price: costPrice.value,
     image_url: imageUrl.value,
     description: description.value,
     menu_id: menuId.value,
@@ -139,7 +144,7 @@ export async function POST(request: Request) {
     const { data, error } = await admin
       .from('products')
       .insert({ ...productInput, menu_id: menuId, is_active: true })
-      .select('id, name, price, stock, image_url, is_active, description, menu_id, variant_name')
+      .select('id, name, price, stock, cost_price, image_url, is_active, description, menu_id, variant_name')
       .single();
 
     if (error) throw error;

@@ -64,6 +64,7 @@ export default function ProductEditForm({ form, uploadingImage, isSaving, isVari
           <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
             <label className="block"><span className={labelClass}>Harga jual</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="1" inputMode="numeric" className={`${inputClass} pl-10`} value={form.value.price || ''} onChange={(event) => form.setField('price', Number(event.target.value))} /></span></label>
             <label className="block"><span className={labelClass}>Stok tersedia</span><input type="number" min="0" inputMode="numeric" className={inputClass} value={form.value.stock} onChange={(event) => form.setField('stock', Number(event.target.value))} /></label>
+            <label className="block"><span className={labelClass}>Modal (harga beli) <span className="font-semibold text-slate-400">(opsional)</span></span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="0" inputMode="numeric" className={`${inputClass} pl-10`} value={form.value.cost_price || ''} onChange={(event) => form.setField('cost_price', Number(event.target.value))} /></span><span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">Dipakai buat hitung keuntungan bersih di Modul Laporan.</span></label>
           </div>
         </section>
 

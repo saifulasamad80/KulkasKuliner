@@ -14,6 +14,7 @@ type ProductPatch = {
   name?: string;
   price?: number;
   stock?: number;
+  cost_price?: number;
   image_url?: string;
   description?: string;
   is_active?: boolean;
@@ -41,6 +42,11 @@ function validatePatch(input: unknown): ProductPatch | null {
     const stock = validateNonNegativeInteger(value.stock);
     if (!stock.valid) return null;
     patch.stock = stock.value;
+  }
+  if ('cost_price' in value) {
+    const costPrice = validateNonNegativeInteger(value.cost_price);
+    if (!costPrice.valid) return null;
+    patch.cost_price = costPrice.value;
   }
   if ('image_url' in value) {
     const imageUrl = normalizeBoundedText(value.image_url, { max: 2_000, requireString: true });
@@ -108,7 +114,7 @@ export async function PATCH(
       .from('products')
       .update(productPatch)
       .eq('id', id)
-      .select('id, name, price, stock, image_url, is_active, description, menu_id, variant_name')
+      .select('id, name, price, stock, cost_price, image_url, is_active, description, menu_id, variant_name')
       .single();
 
     if (error) throw error;

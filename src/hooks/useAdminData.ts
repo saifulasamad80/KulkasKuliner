@@ -34,6 +34,7 @@ export type ProductInput = {
   name: string;
   price: number;
   stock: number;
+  cost_price?: number;
   image_url: string;
   description: string;
   menu_id?: string | null;
@@ -45,6 +46,7 @@ export type ProductVariantInput = {
   variant_name: string;
   price: number;
   stock: number;
+  cost_price: number;
 };
 
 export type VariantMenuInput = {

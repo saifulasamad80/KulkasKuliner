@@ -35,7 +35,7 @@ function readDashboardData() {
       .limit(50),
     admin
       .from('products')
-      .select('id, name, price, stock, image_url, is_active, description, menu_id, variant_name, menus(id, name, description, image_url, is_active)')
+      .select('id, name, price, stock, cost_price, image_url, is_active, description, menu_id, variant_name, menus(id, name, description, image_url, is_active)')
       .order('name', { ascending: true }),
     admin.from('orders').select('total_amount, status'),
   ]);
