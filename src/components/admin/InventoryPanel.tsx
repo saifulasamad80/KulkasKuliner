@@ -190,6 +190,7 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
       {isAdding && (
         <ProductAddForm
           form={newForm}
+          products={products}
           uploadingImage={uploadingImage}
           isSaving={isSaving}
           onSubmit={handleAddProduct}

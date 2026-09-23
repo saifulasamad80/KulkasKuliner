@@ -1,19 +1,22 @@
 "use client";
 
 import { useState } from 'react';
+import { getProductMenu, type Product } from '@/lib/types';
 import type { CreateProductInput, ProductVariantInput } from '@/hooks/useAdminData';
 import type { useProductForm } from '@/hooks/useProductForm';
 
 type ProductAddFormProps = {
   form: ReturnType<typeof useProductForm>;
+  products: Product[];
   uploadingImage: boolean;
   isSaving: boolean;
   onSubmit: (input: CreateProductInput) => void;
   onUploadImage: (file: File) => void;
 };
 
-type MenuMode = 'single' | 'variants';
+type MenuMode = 'single' | 'variants' | 'existing';
 type VariantDraft = ProductVariantInput & { id: number };
+type ExistingMenuOption = { menuId: string; menuName: string; imageUrl: string; description: string; existingVariantNames: string[] };
 
 const inputClass = 'min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base font-semibold text-slate-950 placeholder:text-slate-400 outline-none transition focus:border-green-600 focus:ring-4 focus:ring-green-100';
 const labelClass = 'mb-1.5 block text-sm font-black text-slate-800';
@@ -22,20 +25,64 @@ function createVariant(id: number): VariantDraft {
   return { id, variant_name: '', price: 0, stock: 0, cost_price: 0 };
 }
 
-export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmit, onUploadImage }: ProductAddFormProps) {
+/** Menus that already have at least one variant product, so a new one can be added alongside it. */
+function getExistingMenuOptions(products: Product[]): ExistingMenuOption[] {
+  const byMenu = new Map<string, ExistingMenuOption>();
+  for (const product of products) {
+    if (!product.variant_name || !product.menu_id) continue;
+    const menu = getProductMenu(product);
+    const existing = byMenu.get(product.menu_id);
+    if (existing) {
+      existing.existingVariantNames.push(product.variant_name);
+      continue;
+    }
+    byMenu.set(product.menu_id, {
+      menuId: product.menu_id,
+      menuName: menu?.name || product.name,
+      imageUrl: menu?.image_url || product.image_url || '',
+      description: menu?.description || product.description || '',
+      existingVariantNames: [product.variant_name],
+    });
+  }
+  return Array.from(byMenu.values()).sort((a, b) => a.menuName.localeCompare(b.menuName, 'id-ID'));
+}
+
+export default function ProductAddForm({ form, products, uploadingImage, isSaving, onSubmit, onUploadImage }: ProductAddFormProps) {
   const [mode, setMode] = useState<MenuMode>('single');
   const [variants, setVariants] = useState<VariantDraft[]>([createVariant(1), createVariant(2)]);
   const [nextVariantId, setNextVariantId] = useState(3);
   const isBusy = uploadingImage || isSaving;
+  const existingMenus = getExistingMenuOptions(products);
+  const selectedExistingMenu = existingMenus.find((menu) => menu.menuId === form.value.menu_id) ?? existingMenus[0] ?? null;
 
   const changeMode = (nextMode: MenuMode) => {
     setMode(nextMode);
     if (nextMode === 'single') {
       form.setField('menu_name', '');
       form.setField('variant_name', '');
-    } else {
+      form.setField('menu_id', null);
+    } else if (nextMode === 'variants') {
       form.setField('menu_name', form.value.name);
+      form.setField('menu_id', null);
+    } else {
+      const target = existingMenus.find((menu) => menu.menuId === form.value.menu_id) ?? existingMenus[0] ?? null;
+      form.setField('menu_name', '');
+      form.setField('variant_name', '');
+      form.setField('menu_id', target?.menuId ?? null);
+      if (target) {
+        form.setField('name', target.menuName);
+        if (!form.value.image_url) form.changeImageUrl(target.imageUrl);
+        if (!form.value.description) form.setField('description', target.description);
+      }
     }
+  };
+
+  const changeExistingMenu = (menuId: string) => {
+    const target = existingMenus.find((menu) => menu.menuId === menuId) ?? null;
+    form.setField('menu_id', menuId);
+    form.setField('name', target?.menuName ?? '');
+    form.changeImageUrl(target?.imageUrl ?? '');
+    form.setField('description', target?.description ?? '');
   };
 
   const updateVariant = (id: number, field: keyof ProductVariantInput, value: string | number) => {
@@ -60,6 +107,33 @@ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmi
       return;
     }
 
+    if (mode === 'existing') {
+      if (!selectedExistingMenu) {
+        alert('Belum ada menu bervarian yang bisa ditambahkan. Buat dulu lewat "Punya varian (menu baru)".');
+        return;
+      }
+      const variantName = form.value.variant_name.trim();
+      if (variantName.length < 1 || form.value.price <= 0 || form.value.stock < 0) {
+        alert('Nama varian, harga, dan stok belum valid. Cek lagi, Bro.');
+        return;
+      }
+      const isDuplicate = selectedExistingMenu.existingVariantNames.some(
+        (name) => name.toLocaleLowerCase('id-ID') === variantName.toLocaleLowerCase('id-ID')
+      );
+      if (isDuplicate) {
+        alert(`Varian "${variantName}" sudah ada di menu "${selectedExistingMenu.menuName}". Pakai nama lain.`);
+        return;
+      }
+      onSubmit({
+        ...form.value,
+        name: selectedExistingMenu.menuName,
+        variant_name: variantName,
+        menu_id: selectedExistingMenu.menuId,
+        menu_name: null,
+      });
+      return;
+    }
+
     const menuName = form.value.menu_name.trim();
     const normalizedVariants = variants.map(({ variant_name, price, stock, cost_price }) => ({ variant_name: variant_name.trim(), price, stock, cost_price }));
     const uniqueNames = new Set(normalizedVariants.map((variant) => variant.variant_name.toLocaleLowerCase('id-ID')));
@@ -70,6 +144,9 @@ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmi
       return alert('Setiap varian wajib punya nama, harga valid, dan stok minimal 0.');
     }
     if (uniqueNames.size !== normalizedVariants.length) return alert('Nama varian nggak boleh kembar dalam satu menu.');
+    if (existingMenus.some((menu) => menu.menuName.toLocaleLowerCase('id-ID') === menuName.toLocaleLowerCase('id-ID'))) {
+      return alert(`Menu "${menuName}" sudah ada. Pakai "Tambah ke menu yang sudah ada" buat nambah variannya, bukan bikin menu baru dengan nama sama.`);
+    }
 
     onSubmit({
       kind: 'variants',
@@ -91,35 +168,78 @@ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmi
       <div className="space-y-6 p-4 sm:p-6">
         <fieldset>
           <legend className="mb-2 text-sm font-black text-slate-900">1. Pilih jenis menu</legend>
-          <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-3">
             <button type="button" aria-pressed={mode === 'single'} onClick={() => changeMode('single')} className={`min-h-20 rounded-2xl border-2 p-3.5 text-left transition ${mode === 'single' ? 'border-green-600 bg-green-50 ring-4 ring-green-100' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
               <span className="block text-base font-black text-slate-950">🍱 Menu biasa</span>
               <span className="mt-1 block text-sm leading-5 text-slate-600">Satu pilihan harga dan stok.</span>
             </button>
             <button type="button" aria-pressed={mode === 'variants'} onClick={() => changeMode('variants')} className={`min-h-20 rounded-2xl border-2 p-3.5 text-left transition ${mode === 'variants' ? 'border-violet-600 bg-violet-50 ring-4 ring-violet-100' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-              <span className="block text-base font-black text-slate-950">✨ Punya varian</span>
-              <span className="mt-1 block text-sm leading-5 text-slate-600">Banyak pilihan, beda harga atau stok.</span>
+              <span className="block text-base font-black text-slate-950">✨ Punya varian (menu baru)</span>
+              <span className="mt-1 block text-sm leading-5 text-slate-600">Banyak pilihan sekaligus, menu belum pernah ada.</span>
+            </button>
+            <button type="button" aria-pressed={mode === 'existing'} onClick={() => changeMode('existing')} className={`min-h-20 rounded-2xl border-2 p-3.5 text-left transition ${mode === 'existing' ? 'border-amber-600 bg-amber-50 ring-4 ring-amber-100' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+              <span className="block text-base font-black text-slate-950">🔗 Tambah ke menu yang sudah ada</span>
+              <span className="mt-1 block text-sm leading-5 text-slate-600">Nambah 1 varian baru ke menu bervarian yang sudah ada.</span>
             </button>
           </div>
         </fieldset>
 
-        <section aria-labelledby="product-information-heading" className="space-y-4">
-          <div><p className="text-xs font-black uppercase tracking-[0.16em] text-green-700">Langkah 2</p><h5 id="product-information-heading" className="text-lg font-black text-slate-950">Informasi utama</h5></div>
-          <label className="block">
-            <span className={labelClass}>{mode === 'variants' ? 'Nama menu yang dilihat pembeli' : 'Nama menu'}</span>
-            <input type="text" required maxLength={120} placeholder={mode === 'variants' ? 'Contoh: Ayam Ungkep' : 'Contoh: Ati Ampela Ungkep'} className={inputClass} value={mode === 'variants' ? form.value.menu_name : form.value.name} onChange={(event) => mode === 'variants' ? form.setField('menu_name', event.target.value) : form.setField('name', event.target.value)} />
-            <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">{mode === 'variants' ? 'Cukup isi sekali. Semua varian bakal tampil di bawah menu ini.' : 'Pakai nama yang singkat dan gampang dicari pembeli.'}</span>
-          </label>
-          <label className="block">
-            <span className={labelClass}>Deskripsi singkat <span className="font-semibold text-slate-400">(opsional)</span></span>
-            <span className="relative block">
-              <textarea rows={3} maxLength={90} placeholder="Contoh: Siap goreng, bumbu meresap, isi 4 potong." className={`${inputClass} min-h-24 resize-y pb-8 pr-14`} value={form.value.description} onChange={(event) => form.setField('description', event.target.value)} />
-              <span className={`absolute bottom-3 right-3 text-xs font-black ${form.value.description.length >= 90 ? 'text-red-600' : 'text-slate-400'}`}>{form.value.description.length}/90</span>
-            </span>
-          </label>
-        </section>
+        {mode === 'existing' ? (
+          <>
+            <section aria-labelledby="existing-menu-heading" className="space-y-4">
+              <div><p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Langkah 2</p><h5 id="existing-menu-heading" className="text-lg font-black text-slate-950">Pilih menu</h5></div>
+              {existingMenus.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-amber-300 bg-amber-50 p-3.5 text-sm leading-6 text-amber-800">
+                  Belum ada menu bervarian. Buat dulu lewat opsi &quot;✨ Punya varian (menu baru)&quot; di atas, minimal 2 varian.
+                </p>
+              ) : (
+                <label className="block">
+                  <span className={labelClass}>Menu induk</span>
+                  <select className={inputClass} value={selectedExistingMenu?.menuId ?? ''} onChange={(event) => changeExistingMenu(event.target.value)}>
+                    {existingMenus.map((menu) => (
+                      <option key={menu.menuId} value={menu.menuId}>{menu.menuName} ({menu.existingVariantNames.length} varian)</option>
+                    ))}
+                  </select>
+                  {selectedExistingMenu && (
+                    <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">
+                      Varian yang sudah ada: {selectedExistingMenu.existingVariantNames.join(', ')}
+                    </span>
+                  )}
+                </label>
+              )}
+            </section>
 
-        {mode === 'single' ? (
+            {existingMenus.length > 0 && (
+              <section aria-labelledby="existing-variant-heading" className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                <div className="mb-4"><p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Langkah 3</p><h5 id="existing-variant-heading" className="text-lg font-black text-slate-950">Varian baru</h5></div>
+                <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
+                  <label className="block min-[480px]:col-span-2"><span className={labelClass}>Nama varian</span><input type="text" required maxLength={120} placeholder="Contoh: Crispy Karage" className={inputClass} value={form.value.variant_name} onChange={(event) => form.setField('variant_name', event.target.value)} /></label>
+                  <label className="block"><span className={labelClass}>Harga jual</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" required min="1" inputMode="numeric" placeholder="25000" className={`${inputClass} pl-10`} value={form.value.price || ''} onChange={(event) => form.setField('price', Number(event.target.value))} /></span></label>
+                  <label className="block"><span className={labelClass}>Stok tersedia</span><input type="number" required min="0" inputMode="numeric" placeholder="0" className={inputClass} value={form.value.stock} onChange={(event) => form.setField('stock', Number(event.target.value))} /></label>
+                  <label className="block min-[480px]:col-span-2"><span className={labelClass}>Modal (harga beli dari distributor) <span className="font-semibold text-slate-400">(opsional)</span></span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="0" inputMode="numeric" placeholder="18000" className={`${inputClass} pl-10`} value={form.value.cost_price || ''} onChange={(event) => form.setField('cost_price', Number(event.target.value))} /></span></label>
+                </div>
+              </section>
+            )}
+          </>
+        ) : (
+          <section aria-labelledby="product-information-heading" className="space-y-4">
+            <div><p className="text-xs font-black uppercase tracking-[0.16em] text-green-700">Langkah 2</p><h5 id="product-information-heading" className="text-lg font-black text-slate-950">Informasi utama</h5></div>
+            <label className="block">
+              <span className={labelClass}>{mode === 'variants' ? 'Nama menu yang dilihat pembeli' : 'Nama menu'}</span>
+              <input type="text" required maxLength={120} placeholder={mode === 'variants' ? 'Contoh: Ayam Ungkep' : 'Contoh: Ati Ampela Ungkep'} className={inputClass} value={mode === 'variants' ? form.value.menu_name : form.value.name} onChange={(event) => mode === 'variants' ? form.setField('menu_name', event.target.value) : form.setField('name', event.target.value)} />
+              <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">{mode === 'variants' ? 'Cukup isi sekali. Semua varian bakal tampil di bawah menu ini.' : 'Pakai nama yang singkat dan gampang dicari pembeli.'}</span>
+            </label>
+            <label className="block">
+              <span className={labelClass}>Deskripsi singkat <span className="font-semibold text-slate-400">(opsional)</span></span>
+              <span className="relative block">
+                <textarea rows={3} maxLength={90} placeholder="Contoh: Siap goreng, bumbu meresap, isi 4 potong." className={`${inputClass} min-h-24 resize-y pb-8 pr-14`} value={form.value.description} onChange={(event) => form.setField('description', event.target.value)} />
+                <span className={`absolute bottom-3 right-3 text-xs font-black ${form.value.description.length >= 90 ? 'text-red-600' : 'text-slate-400'}`}>{form.value.description.length}/90</span>
+              </span>
+            </label>
+          </section>
+        )}
+
+        {mode === 'single' && (
           <section aria-labelledby="single-stock-heading" className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-4"><p className="text-xs font-black uppercase tracking-[0.16em] text-green-700">Langkah 3</p><h5 id="single-stock-heading" className="text-lg font-black text-slate-950">Harga dan stok</h5></div>
             <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
@@ -128,7 +248,9 @@ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmi
               <label className="block"><span className={labelClass}>Modal (harga beli dari distributor) <span className="font-semibold text-slate-400">(opsional)</span></span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="0" inputMode="numeric" placeholder="18000" className={`${inputClass} pl-10`} value={form.value.cost_price || ''} onChange={(event) => form.setField('cost_price', Number(event.target.value))} /></span><span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">Dipakai buat hitung keuntungan bersih di Modul Laporan.</span></label>
             </div>
           </section>
-        ) : (
+        )}
+
+        {mode === 'variants' && (
           <section aria-labelledby="variant-heading" className="rounded-2xl border border-violet-200 bg-violet-50/60 p-3.5 sm:p-4">
             <div className="mb-4 flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-end min-[480px]:justify-between">
               <div><p className="text-xs font-black uppercase tracking-[0.16em] text-violet-700">Langkah 3</p><h5 id="variant-heading" className="text-lg font-black text-slate-950">Isi pilihan varian</h5><p className="mt-1 text-sm leading-5 text-slate-600">Harga dan stok diatur per pilihan.</p></div>
@@ -152,14 +274,14 @@ export default function ProductAddForm({ form, uploadingImage, isSaving, onSubmi
         )}
 
         <section aria-labelledby="product-photo-heading" className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div><p className="text-xs font-black uppercase tracking-[0.16em] text-green-700">Langkah 4</p><h5 id="product-photo-heading" className="text-lg font-black text-slate-950">Foto menu</h5><p className="mt-1 text-sm leading-5 text-slate-600">Satu foto dipakai untuk tampilan menu ini.</p></div>
+          <div><p className="text-xs font-black uppercase tracking-[0.16em] text-green-700">Langkah 4</p><h5 id="product-photo-heading" className="text-lg font-black text-slate-950">Foto menu</h5><p className="mt-1 text-sm leading-5 text-slate-600">{mode === 'existing' ? 'Otomatis dari menu yang dipilih. Boleh diganti khusus varian ini.' : 'Satu foto dipakai untuk tampilan menu ini.'}</p></div>
           <label className="block"><span className={labelClass}>Pilih dari perangkat <span className="font-semibold text-slate-400">(opsional)</span></span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={isBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) onUploadImage(file); }} className="block min-h-12 w-full cursor-pointer rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-700 file:mr-3 file:min-h-12 file:border-0 file:bg-slate-900 file:px-4 file:text-sm file:font-black file:text-white disabled:opacity-50" /><span className="mt-1.5 block text-xs font-medium text-slate-500">JPG, PNG, atau WebP. Maksimal 5 MB.</span></label>
           <label className="block"><span className={labelClass}>Atau tempel URL foto</span><input type="url" placeholder="https://..." className={inputClass} value={form.value.image_url} onChange={(event) => form.changeImageUrl(event.target.value)} /></label>
           {form.value.image_url && <div className="flex items-center gap-3 rounded-2xl border border-green-200 bg-white p-3"><img src={form.value.image_url} alt="Pratinjau foto menu" className="h-16 w-16 rounded-xl border border-slate-200 object-cover" /><div className="min-w-0 flex-1"><p className="text-sm font-black text-slate-900">Foto siap dipakai</p><p className="mt-0.5 truncate text-xs font-medium text-slate-500">{form.value.image_url}</p></div><button type="button" disabled={isBusy} onClick={() => void form.removeImage()} className="min-h-11 rounded-xl bg-red-50 px-3 text-sm font-black text-red-600 hover:bg-red-100 disabled:opacity-50">Hapus</button></div>}
         </section>
 
         <div className="sticky bottom-3 z-10 rounded-2xl border border-green-200 bg-white/95 p-2 shadow-[0_16px_35px_-18px_rgba(15,23,42,0.55)] backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
-          <button type="submit" disabled={isBusy} className="min-h-14 w-full rounded-2xl bg-green-600 px-5 text-base font-black text-white shadow-[0_10px_22px_rgba(22,163,74,0.25)] transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60">{uploadingImage ? 'Mengunggah foto...' : isSaving ? 'Menyimpan menu...' : mode === 'variants' ? `Simpan Menu + ${variants.length} Varian` : 'Simpan Menu Baru'}</button>
+          <button type="submit" disabled={isBusy || (mode === 'existing' && existingMenus.length === 0)} className="min-h-14 w-full rounded-2xl bg-green-600 px-5 text-base font-black text-white shadow-[0_10px_22px_rgba(22,163,74,0.25)] transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60">{uploadingImage ? 'Mengunggah foto...' : isSaving ? 'Menyimpan menu...' : mode === 'variants' ? `Simpan Menu + ${variants.length} Varian` : mode === 'existing' ? 'Tambahkan Varian Ini' : 'Simpan Menu Baru'}</button>
         </div>
       </div>
     </form>

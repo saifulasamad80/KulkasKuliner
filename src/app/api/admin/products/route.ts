@@ -139,6 +139,22 @@ export async function POST(request: Request) {
       if (menuError) throw menuError;
       menuId = menu.id;
     }
+
+    if (menuId && input.variant_name) {
+      const { data: siblingVariants, error: siblingError } = await admin
+        .from('products')
+        .select('variant_name')
+        .eq('menu_id', menuId);
+      if (siblingError) throw siblingError;
+      const normalizedNew = input.variant_name.toLocaleLowerCase('id-ID');
+      const isDuplicate = (siblingVariants ?? []).some(
+        (sibling) => typeof sibling.variant_name === 'string' && sibling.variant_name.toLocaleLowerCase('id-ID') === normalizedNew
+      );
+      if (isDuplicate) {
+        return NextResponse.json({ error: `Varian "${input.variant_name}" sudah ada di menu ini. Pakai nama lain.` }, { status: 409 });
+      }
+    }
+
     const productInput = { ...input };
     delete productInput.menu_name;
     const { data, error } = await admin
