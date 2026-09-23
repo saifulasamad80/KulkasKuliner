@@ -1,0 +1,343 @@
+diff --git a/src/components/WhatsAppAdGenerator.tsx b/src/components/WhatsAppAdGenerator.tsx
+index 709a81f..3ac38f4 100755
+--- a/src/components/WhatsAppAdGenerator.tsx
++++ b/src/components/WhatsAppAdGenerator.tsx
+@@ -17,6 +17,7 @@ type WhatsAppAdGeneratorProps = {
+ };
+ 
+ type ShareMode = "chat" | "status";
++type AdContent = { message: string; featuredProductIds: string[] };
+ 
+ /** WhatsApp's own hard limit for a text Status — enforced natively, not by us. */
+ const STATUS_MAX_CHARS = 700;
+@@ -58,11 +59,22 @@ function formatProductLine(product: Product) {
+   return `• ${getProductLabel(product)} — Rp ${Number(product.price).toLocaleString("id-ID")}`;
+ }
+ 
++/**
++ * Rotates among the few genuinely-lowest-stock items instead of always
++ * locking onto the single lowest one, so the FOMO line varies across
++ * regenerations whenever more than one item is actually low. If only one
++ * item is truly low, it will (correctly, honestly) keep showing that one.
++ */
++function pickFomoProduct(lowStockProducts: Product[], rotationSeed: number): Product | null {
++  if (lowStockProducts.length === 0) return null;
++  const pool = lowStockProducts.slice(0, 3);
++  return pool[rotationSeed % pool.length];
++}
++
+ /** Real scarcity/social-proof line — never a fabricated claim, always sourced from actual data. */
+-function getFomoLine(lowStockProducts: Product[], favoriteMenus: FavoriteMenu[]) {
+-  if (lowStockProducts.length > 0) {
+-    const top = lowStockProducts[0];
+-    return `⚡ Tinggal ${top.stock} porsi ${getProductLabel(top)}! Buruan sebelum kehabisan.`;
++function getFomoLine(fomoProduct: Product | null, favoriteMenus: FavoriteMenu[]) {
++  if (fomoProduct) {
++    return `⚡ Tinggal ${fomoProduct.stock} porsi ${getProductLabel(fomoProduct)}! Buruan sebelum kehabisan.`;
+   }
+   const topFavorite = favoriteMenus.find((menu) => menu.soldQuantity > 0);
+   if (topFavorite) {
+@@ -72,13 +84,18 @@ function getFomoLine(lowStockProducts: Product[], favoriteMenus: FavoriteMenu[])
+ }
+ 
+ /** Full version for chat/group share — no hard length limit, but scarcity now leads, not trails. */
+-function createChatAdvertisement(products: Product[], favoriteMenus: FavoriteMenu[], generation: number) {
++function createChatAdvertisement(products: Product[], favoriteMenus: FavoriteMenu[], generation: number): AdContent {
+   const now = new Date();
+   const context = getJakartaTimeContext(now);
+   const availableProducts = getAvailableProducts(products);
+   const lowStockProducts = availableProducts.filter((product) => product.stock <= 5).sort((a, b) => a.stock - b.stock);
+   const rotationSeed = context.hour + now.getMinutes() + context.dayOfMonth + generation * 3;
+   const featuredProducts = selectRotatingProducts(availableProducts, rotationSeed);
++  // Separate seed for the FOMO pick: reusing rotationSeed here would make the
++  // pick invariant across clicks whenever the low-stock pool has exactly 3
++  // items, since generation*3 mod 3 is always 0.
++  const fomoRotationSeed = context.hour + now.getMinutes() + context.dayOfMonth + generation;
++  const fomoProduct = pickFomoProduct(lowStockProducts, fomoRotationSeed);
+   const audienceMoment = getAudienceMoment(context.hour, context.dayName);
+   const siteUrl = getCatalogUrl();
+ 
+@@ -89,13 +106,13 @@ function createChatAdvertisement(products: Product[], favoriteMenus: FavoriteMen
+     "Klik katalog dan amankan favoritmu sebelum kehabisan.",
+   ];
+ 
+-  const fomoLine = getFomoLine(lowStockProducts, favoriteMenus);
++  const fomoLine = getFomoLine(fomoProduct, favoriteMenus);
+   const featuredText = featuredProducts.length > 0
+     ? ["\nMenu siap:", ...featuredProducts.map(formatProductLine)].join("\n")
+     : "\nMenu sedang di-update. Chat kami buat cek stok.";
+   const rotation = rotationSeed % callsToAction.length;
+ 
+-  return [
++  const message = [
+     "🍽️ *KULKASKULINER*",
+     audienceMoment.headline,
+     fomoLine,
+@@ -106,15 +123,25 @@ function createChatAdvertisement(products: Product[], favoriteMenus: FavoriteMen
+     callsToAction[rotation],
+     `👉 ${siteUrl}`,
+   ].join("\n").replace(/\n{3,}/g, "\n\n");
++
++  // Every product actually named in the message — the FOMO line's item plus
++  // the "Menu siap" list — so the photo picker can default to exactly these.
++  const featuredProductIds = Array.from(
++    new Set([fomoProduct?.id, ...featuredProducts.map((product) => product.id)].filter((id): id is string => Boolean(id)))
++  );
++
++  return { message, featuredProductIds };
+ }
+ 
+ /** Short version built to always fit WhatsApp Status's 700-char/10-line limit. */
+-function createStatusAdvertisement(products: Product[], favoriteMenus: FavoriteMenu[], generation: number) {
++function createStatusAdvertisement(products: Product[], favoriteMenus: FavoriteMenu[], generation: number): AdContent {
+   const now = new Date();
+   const context = getJakartaTimeContext(now);
+   const availableProducts = getAvailableProducts(products);
+   const lowStockProducts = availableProducts.filter((product) => product.stock <= 5).sort((a, b) => a.stock - b.stock);
+   const rotationSeed = context.hour + now.getMinutes() + context.dayOfMonth + generation * 3;
++  const fomoRotationSeed = context.hour + now.getMinutes() + context.dayOfMonth + generation;
++  const fomoProduct = pickFomoProduct(lowStockProducts, fomoRotationSeed);
+   const audienceMoment = getAudienceMoment(context.hour, context.dayName);
+   const siteUrl = getCatalogUrl();
+ 
+@@ -124,13 +151,15 @@ function createStatusAdvertisement(products: Product[], favoriteMenus: FavoriteM
+     "Amankan menu favoritmu sekarang",
+   ];
+ 
+-  return [
++  const message = [
+     "🍽️ *KULKASKULINER*",
+     audienceMoment.headline,
+-    getFomoLine(lowStockProducts, favoriteMenus),
++    getFomoLine(fomoProduct, favoriteMenus),
+     `${ctas[rotationSeed % ctas.length]} 👇`,
+     siteUrl,
+   ].join("\n");
++
++  return { message, featuredProductIds: fomoProduct ? [fomoProduct.id] : [] };
+ }
+ 
+ function getWhatsAppShareUrl(message: string) {
+@@ -150,20 +179,20 @@ function getCanShareFilesServerSnapshot() {
+   return false;
+ }
+ 
+-/** Photos to offer, best match first: the low-stock item driving the FOMO line, then the top favorite, then the rest. */
+-function getPhotoCandidates(availableProducts: Product[], favoriteMenus: FavoriteMenu[]): PhotoCandidate[] {
+-  const lowStockFirst = [...availableProducts].filter((product) => product.stock <= 5).sort((a, b) => a.stock - b.stock)[0];
+-  const topFavorite = favoriteMenus
+-    .find((menu) => menu.soldQuantity > 0)
+-    ?.products.find((product) => product.is_active && product.stock > 0);
++/** Photo choices, currently-selected/featured items first, then the rest of the active catalog. */
++function getPhotoCandidates(availableProducts: Product[], priorityProductIds: string[]): PhotoCandidate[] {
++  const priorityFirst = [
++    ...priorityProductIds.map((id) => availableProducts.find((product) => product.id === id)).filter((p): p is Product => Boolean(p)),
++    ...availableProducts,
++  ];
+ 
+   const seen = new Set<string>();
+   const candidates: PhotoCandidate[] = [];
+-  for (const product of [lowStockFirst, topFavorite, ...availableProducts]) {
+-    if (!product || !product.image_url?.trim() || seen.has(product.id)) continue;
++  for (const product of priorityFirst) {
++    if (!product.image_url?.trim() || seen.has(product.id)) continue;
+     seen.add(product.id);
+     candidates.push({ id: product.id, label: getProductLabel(product), url: product.image_url });
+-    if (candidates.length >= 6) break;
++    if (candidates.length >= 8) break;
+   }
+   return candidates;
+ }
+@@ -173,33 +202,51 @@ export default function WhatsAppAdGenerator({ products, favoriteMenus = [] }: Wh
+   const [generation, setGeneration] = useState(0);
+   const [message, setMessage] = useState("");
+   const [copied, setCopied] = useState(false);
+-  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
++  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
+   const [isSharingPhoto, setIsSharingPhoto] = useState(false);
+   const canShareFiles = useSyncExternalStore(subscribeToNothing, getCanShareFilesSnapshot, getCanShareFilesServerSnapshot);
+ 
+   const availableProducts = getAvailableProducts(products);
+   const availableCount = availableProducts.length;
+   const lowStockCount = availableProducts.filter((product) => product.stock <= 5).length;
+-  const photoCandidates = getPhotoCandidates(availableProducts, favoriteMenus);
+-  const selectedPhoto = photoCandidates.find((candidate) => candidate.id === selectedPhotoId) ?? photoCandidates[0] ?? null;
++  const photoCandidates = getPhotoCandidates(availableProducts, selectedPhotoIds);
++  const selectedPhotos = photoCandidates.filter((candidate) => selectedPhotoIds.includes(candidate.id));
+ 
+-  const buildMessage = (nextMode: ShareMode, nextGeneration: number) =>
++  const buildMessage = (nextMode: ShareMode, nextGeneration: number): AdContent =>
+     nextMode === "status"
+       ? createStatusAdvertisement(products, favoriteMenus, nextGeneration)
+       : createChatAdvertisement(products, favoriteMenus, nextGeneration);
+ 
++  /** Auto-picks the photos of whichever products are actually named in this message. */
++  const autoSelectPhotos = (featuredProductIds: string[]) => {
++    const withPhotos = featuredProductIds.filter((id) => availableProducts.find((product) => product.id === id)?.image_url?.trim());
++    setSelectedPhotoIds(withPhotos);
++  };
++
+   const generateNewAd = () => {
+     setCopied(false);
+     const nextGeneration = generation + 1;
+     setGeneration(nextGeneration);
+-    setMessage(buildMessage(mode, nextGeneration));
++    const content = buildMessage(mode, nextGeneration);
++    setMessage(content.message);
++    autoSelectPhotos(content.featuredProductIds);
+   };
+ 
+   const changeMode = (nextMode: ShareMode) => {
+     if (nextMode === mode) return;
+     setMode(nextMode);
+     setCopied(false);
+-    if (message) setMessage(buildMessage(nextMode, generation));
++    if (message) {
++      const content = buildMessage(nextMode, generation);
++      setMessage(content.message);
++      autoSelectPhotos(content.featuredProductIds);
++    }
++  };
++
++  const togglePhoto = (id: string) => {
++    setSelectedPhotoIds((current) =>
++      current.includes(id) ? current.filter((item) => item !== id) : current.length >= 8 ? current : [...current, id]
++    );
+   };
+ 
+   const copyMessage = async () => {
+@@ -214,26 +261,28 @@ export default function WhatsAppAdGenerator({ products, favoriteMenus = [] }: Wh
+     }
+   };
+ 
+-  const shareWithPhoto = async () => {
+-    if (!message || !selectedPhoto) return;
++  const shareWithPhotos = async () => {
++    if (!message || selectedPhotos.length === 0) return;
+     setIsSharingPhoto(true);
+     try {
+-      const response = await fetch(selectedPhoto.url);
+-      if (!response.ok) throw new Error("Foto gagal diambil.");
+-      const blob = await response.blob();
+-      const extension = blob.type.split("/")[1]?.split("+")[0] || "jpg";
+-      const fileName = `${selectedPhoto.label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.${extension}`;
+-      const file = new File([blob], fileName, { type: blob.type || "image/jpeg" });
+-
+-      if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+-        throw new Error("Browser ini belum bisa share foto langsung.");
++      const files = await Promise.all(selectedPhotos.map(async (candidate) => {
++        const response = await fetch(candidate.url);
++        if (!response.ok) throw new Error(`Foto ${candidate.label} gagal diambil.`);
++        const blob = await response.blob();
++        const extension = blob.type.split("/")[1]?.split("+")[0] || "jpg";
++        const fileName = `${candidate.label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.${extension}`;
++        return new File([blob], fileName, { type: blob.type || "image/jpeg" });
++      }));
++
++      if (navigator.canShare && !navigator.canShare({ files })) {
++        throw new Error("Browser ini belum bisa share beberapa foto sekaligus.");
+       }
+ 
+-      await navigator.share({ files: [file], text: message });
++      await navigator.share({ files, text: message });
+     } catch (error) {
+       if (error instanceof Error && error.name === "AbortError") return;
+       alert(
+-        "Share foto langsung nggak didukung di browser/perangkat ini. Buka fotonya (tombol di bawah thumbnail), simpan, lalu lampirkan manual pas kirim di WhatsApp."
++        "Share foto langsung nggak didukung di browser/perangkat ini. Buka fotonya (klik thumbnail-nya), simpan satu-satu, lalu lampirkan manual pas kirim di WhatsApp."
+       );
+     } finally {
+       setIsSharingPhoto(false);
+@@ -254,7 +303,7 @@ export default function WhatsAppAdGenerator({ products, favoriteMenus = [] }: Wh
+           </div>
+           <h2 className="text-xl font-black text-gray-900 sm:text-2xl">Generator Iklan WhatsApp</h2>
+           <p className="mt-1 max-w-2xl text-sm text-gray-600">
+-            Copy singkat berdasarkan jam Jakarta, stok aktif, dan menu paling laris. Bisa sertakan foto juga.
++            Copy singkat berdasarkan jam Jakarta, stok aktif, dan menu paling laris. Foto otomatis mengikuti menu yang disebut di teks.
+           </p>
+         </div>
+         <button
+@@ -314,21 +363,29 @@ export default function WhatsAppAdGenerator({ products, favoriteMenus = [] }: Wh
+ 
+           {photoCandidates.length > 0 && (
+             <div className="mt-4">
+-              <p className="mb-2 text-xs font-black uppercase tracking-wider text-gray-600">Foto buat disertakan (opsional)</p>
++              <p className="mb-2 text-xs font-black uppercase tracking-wider text-gray-600">
++                Foto buat disertakan — otomatis dipilih sesuai menu di teks, boleh diubah
++              </p>
+               <div className="flex gap-2 overflow-x-auto pb-1">
+-                {photoCandidates.map((candidate) => (
+-                  <button
+-                    key={candidate.id}
+-                    type="button"
+-                    onClick={() => setSelectedPhotoId(candidate.id)}
+-                    title={candidate.label}
+-                    aria-label={`Pakai foto ${candidate.label}`}
+-                    aria-pressed={selectedPhoto?.id === candidate.id}
+-                    className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${selectedPhoto?.id === candidate.id ? "border-green-600" : "border-transparent hover:border-green-300"}`}
+-                  >
+-                    <img src={candidate.url} alt={candidate.label} className="h-full w-full object-cover" />
+-                  </button>
+-                ))}
++                {photoCandidates.map((candidate) => {
++                  const isSelected = selectedPhotoIds.includes(candidate.id);
++                  return (
++                    <button
++                      key={candidate.id}
++                      type="button"
++                      onClick={() => togglePhoto(candidate.id)}
++                      title={candidate.label}
++                      aria-label={`${isSelected ? "Batalkan" : "Pakai"} foto ${candidate.label}`}
++                      aria-pressed={isSelected}
++                      className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${isSelected ? "border-green-600" : "border-transparent opacity-60 hover:border-green-300 hover:opacity-100"}`}
++                    >
++                      <img src={candidate.url} alt={candidate.label} className="h-full w-full object-cover" />
++                      {isSelected && (
++                        <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-green-600 text-[10px] font-black text-white">✓</span>
++                      )}
++                    </button>
++                  );
++                })}
+               </div>
+             </div>
+           )}
+@@ -352,25 +409,21 @@ export default function WhatsAppAdGenerator({ products, favoriteMenus = [] }: Wh
+             >
+               Buka WhatsApp &amp; Share →
+             </a>
+-            {canShareFiles && selectedPhoto && (
++            {canShareFiles && selectedPhotos.length > 0 && (
+               <button
+                 type="button"
+-                onClick={() => void shareWithPhoto()}
++                onClick={() => void shareWithPhotos()}
+                 disabled={!message || overStatusLimit || isSharingPhoto}
+                 className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-[#25D366] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#1ebe5d] disabled:cursor-not-allowed disabled:opacity-50"
+               >
+-                {isSharingPhoto ? "Menyiapkan foto…" : "📷 Share dengan Foto"}
++                {isSharingPhoto ? "Menyiapkan foto…" : `📷 Share ${selectedPhotos.length > 1 ? `${selectedPhotos.length} Foto` : "Foto"}`}
+               </button>
+             )}
+           </div>
+ 
+-          {!canShareFiles && selectedPhoto && (
++          {!canShareFiles && selectedPhotos.length > 0 && (
+             <p className="mt-2 text-xs text-gray-500">
+-              Share foto otomatis cuma jalan di HP.{" "}
+-              <a href={selectedPhoto.url} target="_blank" rel="noopener noreferrer" className="font-bold text-green-700 underline">
+-                Buka fotonya di sini
+-              </a>
+-              , simpan (tekan lama gambarnya), lalu lampirkan manual pas kirim di WhatsApp.
++              Share foto otomatis cuma jalan di HP. Buka tiap foto (klik thumbnail-nya di atas), simpan (tekan lama gambarnya), lalu lampirkan manual pas kirim di WhatsApp.
+             </p>
+           )}
+         </div>
+@@ -388,7 +441,7 @@ export default function WhatsAppAdGenerator({ products, favoriteMenus = [] }: Wh
+             </div>
+           </dl>
+           <p className="mt-4 border-t border-gray-100 pt-3 text-xs leading-5 text-gray-500">
+-            Link teks nggak mengirim otomatis — WhatsApp kebuka dengan teks siap kirim, admin tetap pilih kontak, grup, atau Status tujuan. Tombol foto membuka menu share HP; WhatsApp muncul sebagai salah satu pilihannya.
++            Link teks nggak mengirim otomatis — WhatsApp kebuka dengan teks siap kirim, admin tetap pilih kontak, grup, atau Status tujuan. Tombol foto membuka menu share HP dengan semua foto terpilih sekaligus; WhatsApp muncul sebagai salah satu pilihannya.
+           </p>
+         </aside>
+       </div>
