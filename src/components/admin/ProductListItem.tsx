@@ -11,11 +11,13 @@ type ProductListItemProps = {
   editForm: ReturnType<typeof useProductForm>;
   uploadingImage: boolean;
   isSaving: boolean;
+  isDeleting: boolean;
   onStartEdit: (product: Product) => void;
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onUploadImage: (file: File) => void;
   onToggleActive: () => void;
+  onDelete: () => void;
 };
 
 export default function ProductListItem({
@@ -24,11 +26,13 @@ export default function ProductListItem({
   editForm,
   uploadingImage,
   isSaving,
+  isDeleting,
   onStartEdit,
   onSaveEdit,
   onCancelEdit,
   onUploadImage,
   onToggleActive,
+  onDelete,
 }: ProductListItemProps) {
   const menu = getProductMenu(product);
   const displayName = product.variant_name ? menu?.name || product.name : product.name;
@@ -76,12 +80,15 @@ export default function ProductListItem({
               </div>
             </div>
           </div>
-          <div className="mt-1 grid grid-cols-2 gap-2 border-t border-gray-100 pt-3">
-            <button onClick={() => onStartEdit(product)} className="min-h-10 rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 transition-colors hover:bg-blue-100">
+          <div className="mt-1 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
+            <button onClick={() => onStartEdit(product)} disabled={isDeleting} className="min-h-10 rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-50">
               Edit Item
             </button>
-            <button onClick={onToggleActive} className={`min-h-10 rounded-lg px-3 py-2 text-xs font-black transition-colors ${product.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>
+            <button onClick={onToggleActive} disabled={isDeleting} className={`min-h-10 rounded-lg px-3 py-2 text-xs font-black transition-colors disabled:opacity-50 ${product.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>
               {product.is_active ? 'Sembunyikan' : 'Tampilkan Publik'}
+            </button>
+            <button onClick={onDelete} disabled={isDeleting} className="min-h-10 rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-black text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50">
+              {isDeleting ? 'Menghapus…' : '🗑️ Hapus'}
             </button>
           </div>
         </>

@@ -65,11 +65,11 @@ async function readError(response: Response) {
 }
 
 /** POST/PATCH `url` with a JSON body, throwing the server's error message on failure. */
-async function requestJson(url: string, method: 'POST' | 'PATCH', body: unknown) {
+async function requestJson(url: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown) {
   const response = await fetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) throw new Error(await readError(response));
 }
@@ -156,6 +156,11 @@ export function useAdminData(enabled: boolean) {
     await fetchData();
   };
 
+  const deleteProduct = async (id: string) => {
+    await requestJson(`/api/admin/products/${encodeURIComponent(id)}`, 'DELETE');
+    await fetchData();
+  };
+
   return {
     orders,
     products,
@@ -168,5 +173,6 @@ export function useAdminData(enabled: boolean) {
     updateProduct,
     updateOrderStatus,
     toggleProductActive,
+    deleteProduct,
   };
 }

@@ -19,7 +19,7 @@ export default function AdminDashboard() {
   const { isAuthenticated, isCheckingAuth, isVerifying, pinInput, setPinInput, login, logout } = useAdminAuth();
   const {
     orders, products, totalRevenue, favoriteMenus, productSales, isLoading,
-    createProduct, updateProduct, updateOrderStatus, toggleProductActive,
+    createProduct, updateProduct, updateOrderStatus, toggleProductActive, deleteProduct,
   } = useAdminData(isAuthenticated);
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
 
@@ -125,6 +125,7 @@ export default function AdminDashboard() {
                   createProduct={createProduct}
                   updateProduct={updateProduct}
                   toggleProductActive={toggleProductActive}
+                  deleteProduct={deleteProduct}
                 />
               </DashboardModule>
             )}

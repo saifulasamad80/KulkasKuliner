@@ -83,6 +83,60 @@ function validatePatch(input: unknown): ProductPatch | null {
 
 export const runtime = 'nodejs';
 
+export async function DELETE(
+  request: Request,
+  context: RouteContext<'/api/admin/products/[id]'>
+) {
+  const denied = await requireAdmin(request);
+  if (denied) return denied;
+
+  const { id } = await context.params;
+
+  try {
+    const admin = getSupabaseAdmin();
+
+    const { data: existingOrderItem, error: checkError } = await admin
+      .from('order_items')
+      .select('id')
+      .eq('product_id', id)
+      .limit(1)
+      .maybeSingle();
+
+    if (checkError) throw checkError;
+    if (existingOrderItem) {
+      return NextResponse.json(
+        {
+          error:
+            'Produk ini sudah pernah dipesan, jadi nggak bisa dihapus permanen — biar riwayat pesanan dan laporan penjualan tetap utuh. Pakai tombol "Sembunyikan" kalau cuma mau menyembunyikannya dari katalog publik.',
+        },
+        { status: 409 }
+      );
+    }
+
+    const { error: deleteError, count } = await admin
+      .from('products')
+      .delete({ count: 'exact' })
+      .eq('id', id);
+
+    if (deleteError) throw deleteError;
+    if (!count) {
+      return NextResponse.json({ error: 'Produk tidak ditemukan. Muat ulang dashboard lalu coba lagi.' }, { status: 404 });
+    }
+
+    return NextResponse.json({ deleted: true });
+  } catch (error) {
+    console.error('Produk gagal dihapus:', error);
+    const databaseError = error as { code?: string; message?: string };
+    if (databaseError?.code === '23503') {
+      return NextResponse.json(
+        { error: 'Produk ini masih terhubung ke data pesanan, jadi nggak bisa dihapus permanen. Pakai tombol "Sembunyikan" sebagai gantinya.' },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: 'Produk gagal dihapus. Cek koneksi database atau muat ulang dashboard.' }, { status: 502 });
+  }
+}
+
 export async function PATCH(
   request: Request,
   context: RouteContext<'/api/admin/products/[id]'>

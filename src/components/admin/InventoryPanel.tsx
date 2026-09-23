@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { getProductMenu, type Product } from '@/lib/types';
 import type { CreateProductInput, ProductInput } from '@/hooks/useAdminData';
 import { deleteMenuImage, useProductForm } from '@/hooks/useProductForm';
+import { getProductLabel } from '@/lib/marketing';
 import ProductAddForm from './ProductAddForm';
 import ProductListItem from './ProductListItem';
 
@@ -12,13 +13,15 @@ type InventoryPanelProps = {
   createProduct: (input: CreateProductInput) => Promise<void>;
   updateProduct: (id: string, input: ProductInput) => Promise<void>;
   toggleProductActive: (id: string, currentStatus: boolean) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
 };
 
-export default function InventoryPanel({ products, createProduct, updateProduct, toggleProductActive }: InventoryPanelProps) {
+export default function InventoryPanel({ products, createProduct, updateProduct, toggleProductActive, deleteProduct }: InventoryPanelProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const newForm = useProductForm();
@@ -137,6 +140,22 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
     }
   };
 
+  const handleDeleteProduct = async (product: Product) => {
+    const confirmed = confirm(
+      `HAPUS PERMANEN "${getProductLabel(product)}"?\n\nAksi ini TIDAK BISA dibatalkan. Kalau produk ini pernah dipesan, penghapusan akan ditolak otomatis (pakai "Sembunyikan" saja buat itu).\n\nLanjutkan hapus permanen?`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(product.id);
+    try {
+      await deleteProduct(product.id);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Produk gagal dihapus.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <>
       <div className="mb-5 flex flex-col gap-3 border-b border-slate-100 pb-4 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
@@ -192,11 +211,13 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
               editForm={editForm}
               uploadingImage={uploadingImage}
               isSaving={isSaving}
+              isDeleting={deletingId === product.id}
               onStartEdit={startEditProduct}
               onSaveEdit={() => void saveEditProduct(product.id)}
               onCancelEdit={() => void cancelEditProduct()}
               onUploadImage={(file) => void uploadProductImage(file, editForm)}
               onToggleActive={() => void handleToggleActive(product)}
+              onDelete={() => void handleDeleteProduct(product)}
             />
           ))}
         </div>
