@@ -9,15 +9,16 @@ import DashboardModule from '@/components/admin/DashboardModule';
 import DashboardModuleCard from '@/components/admin/DashboardModuleCard';
 import InventoryPanel from '@/components/admin/InventoryPanel';
 import OrdersPanel from '@/components/admin/OrdersPanel';
+import LaporanPanel from '@/components/admin/LaporanPanel';
 import WhatsAppAdGenerator from '@/components/WhatsAppAdGenerator';
 import SocialContentGenerator from '@/components/SocialContentGenerator';
 
-type ModuleKey = 'pesanan' | 'menu' | 'iklan';
+type ModuleKey = 'pesanan' | 'menu' | 'iklan' | 'laporan';
 
 export default function AdminDashboard() {
   const { isAuthenticated, isCheckingAuth, isVerifying, pinInput, setPinInput, login, logout } = useAdminAuth();
   const {
-    orders, products, totalRevenue, favoriteMenus, isLoading,
+    orders, products, totalRevenue, favoriteMenus, productSales, isLoading,
     createProduct, updateProduct, updateOrderStatus, toggleProductActive,
   } = useAdminData(isAuthenticated);
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
@@ -43,6 +44,7 @@ export default function AdminDashboard() {
 
   const pendingOrderCount = orders.filter((order) => order.status === 'unpaid').length;
   const activeMenuCount = products.filter((product) => product.is_active).length;
+  const lowStockCount = products.filter((product) => product.stock <= 5).length;
 
   return (
     <main className="min-h-screen bg-[#f4f6f8]">
@@ -60,11 +62,11 @@ export default function AdminDashboard() {
                 <p className="mt-1 text-sm leading-6 text-slate-500">Pilih satu modul untuk mulai bekerja.</p>
               </div>
               <span className="hidden rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-500 shadow-sm sm:inline-flex">
-                3 modul aktif
+                4 modul aktif
               </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:gap-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
               <DashboardModuleCard
                 icon="🧾"
                 eyebrow={pendingOrderCount > 0 ? `${pendingOrderCount} perlu dicek` : 'Semua beres'}
@@ -88,6 +90,14 @@ export default function AdminDashboard() {
                 description="Bikin konten promosi WhatsApp, Instagram, dan TikTok"
                 theme="purple"
                 onClick={() => setActiveModule('iklan')}
+              />
+              <DashboardModuleCard
+                icon="📊"
+                eyebrow={lowStockCount > 0 ? `${lowStockCount} perlu restock` : 'Stok aman'}
+                title="Modul Laporan"
+                description="Lihat stok habis, menu paling laris, dan export ke Excel"
+                theme="amber"
+                onClick={() => setActiveModule('laporan')}
               />
             </div>
           </section>
@@ -121,8 +131,14 @@ export default function AdminDashboard() {
 
             {activeModule === 'iklan' && (
               <DashboardModule title="Modul Iklan" subtitle="Siapkan materi promosi dari data katalog yang sedang aktif.">
-                <WhatsAppAdGenerator products={products} />
+                <WhatsAppAdGenerator products={products} favoriteMenus={favoriteMenus} />
                 <SocialContentGenerator products={products} favoriteMenus={favoriteMenus} />
+              </DashboardModule>
+            )}
+
+            {activeModule === 'laporan' && (
+              <DashboardModule title="Modul Laporan" subtitle="Pantau stok, cari menu yang harus di-restock ke distributor, dan lihat menu paling laris.">
+                <LaporanPanel products={products} productSales={productSales} />
               </DashboardModule>
             )}
           </section>

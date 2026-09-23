@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FavoriteMenu, Product } from "@/lib/types";
 import {
   getAvailableProducts,
@@ -13,9 +13,10 @@ import {
   selectRotatingProducts,
   type TimeContext,
 } from "@/lib/marketing";
+import { generateSlideshowVideo, type SlideshowProgress } from "@/lib/slideshow-video";
 
 type SocialContentGeneratorProps = { products: Product[]; favoriteMenus?: FavoriteMenu[] };
-type ContentMode = "carousel" | "video";
+type ContentMode = "carousel" | "video" | "slideshow";
 type AudienceMoment = { mindset: string; hook: string; urgency: string; cta: string };
 
 function getAudienceMoment(hour: number, dayName: string): AudienceMoment {
@@ -79,6 +80,18 @@ function createCommonCopy(context: TimeContext, audienceMoment: AudienceMoment, 
   return { caption, story };
 }
 
+function createSlideshowCopy(products: Product[], favoriteMenus: FavoriteMenu[], generation: number) {
+  const now = new Date();
+  const context = getJakartaTimeContext(now);
+  const audienceMoment = getAudienceMoment(context.hour, context.dayName);
+  const selectedProducts = selectProducts(products, favoriteMenus, generation, true);
+  const productNames = selectedProducts.length > 0 ? selectedProducts.map(getProductLabel).join(" dan ") : "menu frozen food yang tersedia";
+  const stockFomo = getStockFomo(products, favoriteMenus);
+  const catalogUrl = getCatalogUrl();
+  const { caption, story } = createCommonCopy(context, audienceMoment, productNames, stockFomo, catalogUrl);
+  return { caption, story, hook: audienceMoment.hook, cta: audienceMoment.cta, catalogUrl };
+}
+
 function createSocialContent(products: Product[], favoriteMenus: FavoriteMenu[], generation: number, mode: ContentMode) {
   const now = new Date();
   const context = getJakartaTimeContext(now);
@@ -139,15 +152,24 @@ function getPlatformUrl(platform: "instagram" | "tiktok") {
   return platform === "instagram" ? "https://www.instagram.com/" : "https://www.tiktok.com/";
 }
 
-function getInstagramCaption(content: string) {
-  const startMarker = "CAPTION INSTAGRAM\n";
-  const endMarker = "\n\nVERSI INSTAGRAM STORY";
-  const start = content.indexOf(startMarker);
-  if (start === -1) return content;
+/** Pulls one labelled section out of the generated package (e.g. just the caption, not the whole creative brief). */
+function extractSection(content: string, headingPrefix: string, nextHeadingPrefixes: string[]) {
+  const lines = content.split("\n");
+  const startIndex = lines.findIndex((line) => line.startsWith(headingPrefix));
+  if (startIndex === -1) return content;
 
-  const captionStart = start + startMarker.length;
-  const end = content.indexOf(endMarker, captionStart);
-  return content.slice(captionStart, end === -1 ? undefined : end).trim();
+  const afterHeading = lines.slice(startIndex + 1);
+  const relativeEnd = afterHeading.findIndex((line) => nextHeadingPrefixes.some((prefix) => line.startsWith(prefix)));
+  const sectionLines = relativeEnd === -1 ? afterHeading : afterHeading.slice(0, relativeEnd);
+  return sectionLines.join("\n").trim();
+}
+
+function getInstagramCaption(content: string) {
+  return extractSection(content, "CAPTION INSTAGRAM", ["VERSI INSTAGRAM STORY"]);
+}
+
+function getInstagramStory(content: string) {
+  return extractSection(content, "VERSI INSTAGRAM STORY", ["HASHTAG"]);
 }
 
 function getFileExtension(contentType: string | null, imageUrl: string) {
@@ -168,8 +190,22 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
   const [generatedMode, setGeneratedMode] = useState<ContentMode | null>(null);
   const [content, setContent] = useState("");
   const [previewProducts, setPreviewProducts] = useState<Product[]>([]);
-  const [copied, setCopied] = useState(false);
+  const [copiedSection, setCopiedSection] = useState<"package" | "caption" | "story" | null>(null);
   const [isSharing, setIsSharing] = useState(false);
+
+  const [slideshowCopy, setSlideshowCopy] = useState<{ caption: string; story: string; hook: string; cta: string; catalogUrl: string } | null>(null);
+  const [slideshowCandidates, setSlideshowCandidates] = useState<Product[]>([]);
+  const [selectedSlideshowIds, setSelectedSlideshowIds] = useState<string[]>([]);
+  const [slideshowStatus, setSlideshowStatus] = useState<"idle" | "loading" | "rendering" | "done" | "error">("idle");
+  const [slideshowProgress, setSlideshowProgress] = useState(0);
+  const [slideshowVideoUrl, setSlideshowVideoUrl] = useState<string | null>(null);
+  const [slideshowError, setSlideshowError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (slideshowVideoUrl) URL.revokeObjectURL(slideshowVideoUrl);
+    };
+  }, [slideshowVideoUrl]);
 
   const availableProducts = getAvailableProducts(products);
   const availableCount = availableProducts.length;
@@ -180,19 +216,77 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
     const nextGeneration = generation + 1;
     setGeneration(nextGeneration);
     setGeneratedMode(mode);
+    setCopiedSection(null);
+
+    if (mode === "slideshow") {
+      setSlideshowCopy(createSlideshowCopy(products, favoriteMenus, nextGeneration));
+      const candidates = getAvailableProducts(products).filter((product) => Boolean(product.image_url?.trim()));
+      setSlideshowCandidates(candidates);
+      setSelectedSlideshowIds(selectProducts(products, favoriteMenus, nextGeneration, true).map((product) => product.id));
+      setSlideshowStatus("idle");
+      setSlideshowProgress(0);
+      setSlideshowError(null);
+      if (slideshowVideoUrl) URL.revokeObjectURL(slideshowVideoUrl);
+      setSlideshowVideoUrl(null);
+      setContent("");
+      return;
+    }
+
     setContent(createSocialContent(products, favoriteMenus, nextGeneration, mode));
     setPreviewProducts(selectProducts(products, favoriteMenus, nextGeneration, mode === "carousel"));
-    setCopied(false);
   };
 
-  const copyContent = async () => {
-    if (!content) return;
+  const toggleSlideshowPhoto = (id: string) => {
+    setSelectedSlideshowIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : current.length >= 8 ? current : [...current, id]
+    );
+  };
+
+  const buildSlideshow = async () => {
+    if (!slideshowCopy || selectedSlideshowIds.length === 0) return;
+    setSlideshowStatus("loading");
+    setSlideshowProgress(0);
+    setSlideshowError(null);
+    if (slideshowVideoUrl) URL.revokeObjectURL(slideshowVideoUrl);
+    setSlideshowVideoUrl(null);
+
     try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2_500);
+      const orderedPhotos = selectedSlideshowIds
+        .map((id) => slideshowCandidates.find((product) => product.id === id))
+        .filter((product): product is Product => Boolean(product))
+        .map((product) => ({
+          url: product.image_url as string,
+          title: getProductLabel(product),
+          subtitle: `Rp ${Number(product.price).toLocaleString("id-ID")}`,
+        }));
+
+      const { blob } = await generateSlideshowVideo(
+        orderedPhotos,
+        slideshowCopy.hook,
+        slideshowCopy.cta,
+        slideshowCopy.catalogUrl,
+        (progress: SlideshowProgress) => {
+          setSlideshowStatus(progress.phase);
+          setSlideshowProgress(progress.ratio);
+        }
+      );
+
+      setSlideshowVideoUrl(URL.createObjectURL(blob));
+      setSlideshowStatus("done");
+    } catch (error) {
+      setSlideshowError(error instanceof Error ? error.message : "Video gagal dibuat.");
+      setSlideshowStatus("error");
+    }
+  };
+
+  const copyText = async (text: string, section: "package" | "caption" | "story") => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedSection(section);
+      window.setTimeout(() => setCopiedSection((current) => (current === section ? null : current)), 2_500);
     } catch {
-      alert("Copy otomatis ditolak browser. Blok teks kontennya lalu copy manual, ya.");
+      alert("Copy otomatis ditolak browser. Blok teksnya lalu copy manual, ya.");
     }
   };
 
@@ -285,39 +379,139 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
             <span className="text-xs font-semibold text-purple-700">Nggak wajib bikin video</span>
           </div>
           <h2 className="text-xl font-black text-gray-900 sm:text-2xl">Generator Konten Sosial</h2>
-          <p className="mt-1 max-w-2xl text-sm text-gray-600">Pilih carousel foto kalau belum punya video. Generator tetap bikin hook, caption, Story, CTA, dan FOMO berdasarkan jam Jakarta serta stok nyata.</p>
+          <p className="mt-1 max-w-2xl text-sm text-gray-600">Pilih carousel foto, video slideshow otomatis, atau naskah video manual. Generator tetap bikin hook, caption, Story, CTA, dan FOMO berdasarkan jam Jakarta serta stok nyata.</p>
         </div>
         <button type="button" onClick={generateContent} className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400 sm:w-auto"><span className="text-lg leading-none">✦</span>Buat Konten Baru</button>
       </div>
 
       <div className="border-b border-purple-100 px-5 pt-5 sm:px-6">
-        <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:flex sm:flex-wrap" role="group" aria-label="Pilih format konten">
-          <button type="button" onClick={() => setMode("carousel")} className={`min-h-11 rounded-lg px-4 py-2 text-sm font-bold transition-colors ${mode === "carousel" ? "bg-purple-600 text-white" : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"}`}>📸 Foto Carousel (rekomendasi)</button>
-          <button type="button" onClick={() => setMode("video")} className={`min-h-11 rounded-lg px-4 py-2 text-sm font-bold transition-colors ${mode === "video" ? "bg-purple-600 text-white" : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"}`}>🎬 Script Video</button>
+        <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-3 sm:flex sm:flex-wrap" role="group" aria-label="Pilih format konten">
+          <button type="button" onClick={() => setMode("carousel")} className={`min-h-11 rounded-lg px-4 py-2 text-sm font-bold transition-colors ${mode === "carousel" ? "bg-purple-600 text-white" : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"}`}>📸 Foto Carousel</button>
+          <button type="button" onClick={() => setMode("slideshow")} className={`min-h-11 rounded-lg px-4 py-2 text-sm font-bold transition-colors ${mode === "slideshow" ? "bg-purple-600 text-white" : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"}`}>🎬 Video Slideshow (rekomendasi)</button>
+          <button type="button" onClick={() => setMode("video")} className={`min-h-11 rounded-lg px-4 py-2 text-sm font-bold transition-colors ${mode === "video" ? "bg-purple-600 text-white" : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"}`}>📝 Naskah Video Manual</button>
         </div>
-        <p className="pb-5 pt-2 text-xs text-gray-500">{mode === "carousel" ? "Pakai foto produk di katalog—susun 5 slide, lalu upload sebagai carousel Instagram." : "Kalau nanti sudah siap rekam, satu video 9:16 bisa dipakai di TikTok dan Instagram Reels."}</p>
+        <p className="pb-5 pt-2 text-xs text-gray-500">
+          {mode === "carousel"
+            ? "Pakai foto produk di katalog—susun 5 slide, lalu upload sebagai carousel Instagram."
+            : mode === "slideshow"
+              ? "Video asli dibuat otomatis di browser dari foto produk (crossfade + teks). Gratis, tanpa AI berbayar—tapi paling lancar di Chrome/Edge Android atau desktop."
+              : "Kalau nanti sudah siap rekam sendiri, satu video 9:16 bisa dipakai di TikTok dan Instagram Reels."}
+        </p>
       </div>
 
       <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div>
-          <label htmlFor="social-content-copy" className="mb-2 block text-xs font-black uppercase tracking-wider text-gray-600">{generatedMode === "carousel" ? "Paket carousel — bebas diedit" : "Paket konten — bebas diedit"}</label>
-          <textarea id="social-content-copy" value={content} onChange={(event) => setContent(event.target.value)} rows={generatedMode === "carousel" ? 28 : 24} disabled={!content} className="w-full resize-y rounded-xl border border-gray-300 bg-white p-4 text-sm leading-6 text-gray-800 shadow-inner outline-none transition-shadow focus:border-purple-500 focus:ring-2 focus:ring-purple-200 disabled:cursor-wait disabled:bg-gray-50" aria-label="Preview paket konten sosial" />
-          <div className="mt-3 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:flex sm:flex-wrap">
-            <button type="button" onClick={() => void copyContent()} disabled={!content} className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">{copied ? "✓ Tersalin" : "Salin Paket Konten"}</button>
-            {generatedMode === "carousel" && <>
-              <button type="button" onClick={() => void shareCarousel()} disabled={!content || isSharing} className="min-h-11 rounded-lg bg-pink-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-gray-300">{isSharing ? "Menyiapkan foto…" : "Bagikan Foto + Caption"}</button>
-              <button type="button" onClick={() => void downloadCarouselImages()} disabled={!content || isSharing} className="min-h-11 rounded-lg border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-bold text-pink-700 transition-colors hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-50">Download Foto Carousel</button>
-            </>}
-            <a href={content ? getPlatformUrl("instagram") : undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!content} className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2 text-center text-sm font-bold text-white transition-colors ${content ? "bg-pink-600 hover:bg-pink-700" : "pointer-events-none bg-gray-300"}`}>Buka Instagram →</a>
-            <a href={content ? getPlatformUrl("tiktok") : undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!content} className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2 text-center text-sm font-bold text-white transition-colors ${content ? "bg-gray-900 hover:bg-black" : "pointer-events-none bg-gray-300"}`}>Buka TikTok →</a>
-          </div>
+          {generatedMode === "slideshow" ? (
+            <div>
+              <p className="mb-2 text-xs font-black uppercase tracking-wider text-gray-600">Pilih foto buat slideshow (2–8 foto)</p>
+              {slideshowCandidates.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-orange-300 bg-orange-50 p-3 text-xs leading-5 text-orange-800">
+                  Produk aktif belum punya foto. Isi URL foto di Modul Menu dulu, lalu buat konten lagi.
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                  {slideshowCandidates.map((product) => {
+                    const selectedIndex = selectedSlideshowIds.indexOf(product.id);
+                    const isSelected = selectedIndex !== -1;
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        onClick={() => toggleSlideshowPhoto(product.id)}
+                        title={getProductLabel(product)}
+                        aria-pressed={isSelected}
+                        className={`relative overflow-hidden rounded-lg border-2 transition-colors ${isSelected ? "border-purple-600" : "border-transparent hover:border-purple-300"}`}
+                      >
+                        <img src={product.image_url as string} alt={getProductLabel(product)} className="aspect-square w-full object-cover" />
+                        {isSelected && (
+                          <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-purple-600 text-[11px] font-black text-white">
+                            {selectedIndex + 1}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void buildSlideshow()}
+                disabled={selectedSlideshowIds.length === 0 || slideshowStatus === "loading" || slideshowStatus === "rendering"}
+                className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              >
+                {slideshowStatus === "loading"
+                  ? "Memuat foto…"
+                  : slideshowStatus === "rendering"
+                    ? `Merender video… ${Math.round(slideshowProgress * 100)}%`
+                    : "🎬 Buat Video Slideshow"}
+              </button>
+
+              {(slideshowStatus === "loading" || slideshowStatus === "rendering") && (
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                  <div className="h-full bg-purple-600 transition-all" style={{ width: `${Math.round(slideshowProgress * 100)}%` }} />
+                </div>
+              )}
+
+              {slideshowError && <p className="mt-2 text-xs font-bold text-red-600">{slideshowError}</p>}
+
+              {slideshowVideoUrl && (
+                <div className="mt-4">
+                  <video src={slideshowVideoUrl} controls loop muted className="w-full max-w-[280px] rounded-xl border border-gray-200 shadow-sm" />
+                  <a
+                    href={slideshowVideoUrl}
+                    download="kulkaskuliner-slideshow.webm"
+                    className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-purple-700"
+                  >
+                    Download Video (.webm)
+                  </a>
+                </div>
+              )}
+
+              {slideshowCopy && (
+                <div className="mt-5">
+                  <label htmlFor="slideshow-caption" className="mb-2 block text-xs font-black uppercase tracking-wider text-gray-600">Caption buat upload — bebas diedit</label>
+                  <textarea
+                    id="slideshow-caption"
+                    value={slideshowCopy.caption}
+                    onChange={(event) => setSlideshowCopy({ ...slideshowCopy, caption: event.target.value })}
+                    rows={6}
+                    className="w-full resize-y rounded-xl border border-gray-300 bg-white p-4 text-sm leading-6 text-gray-800 shadow-inner outline-none transition-shadow focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void copyText(slideshowCopy.caption, "caption")}
+                    className="mt-2 min-h-11 rounded-lg border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-bold text-purple-700 transition-colors hover:bg-purple-100"
+                  >
+                    {copiedSection === "caption" ? "✓ Tersalin" : "Salin Caption"}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <label htmlFor="social-content-copy" className="mb-2 block text-xs font-black uppercase tracking-wider text-gray-600">{generatedMode === "carousel" ? "Paket carousel — bebas diedit" : "Paket konten — bebas diedit"}</label>
+              <textarea id="social-content-copy" value={content} onChange={(event) => setContent(event.target.value)} rows={generatedMode === "carousel" ? 28 : 24} disabled={!content} className="w-full resize-y rounded-xl border border-gray-300 bg-white p-4 text-sm leading-6 text-gray-800 shadow-inner outline-none transition-shadow focus:border-purple-500 focus:ring-2 focus:ring-purple-200 disabled:cursor-wait disabled:bg-gray-50" aria-label="Preview paket konten sosial" />
+              <div className="mt-3 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:flex sm:flex-wrap">
+                <button type="button" onClick={() => void copyText(content, "package")} disabled={!content} className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">{copiedSection === "package" ? "✓ Tersalin" : "Salin Paket Konten"}</button>
+                <button type="button" onClick={() => void copyText(getInstagramCaption(content), "caption")} disabled={!content} className="min-h-11 rounded-lg border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-bold text-purple-700 transition-colors hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-50">{copiedSection === "caption" ? "✓ Tersalin" : "Salin Caption Saja"}</button>
+                <button type="button" onClick={() => void copyText(getInstagramStory(content), "story")} disabled={!content} className="min-h-11 rounded-lg border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-bold text-purple-700 transition-colors hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-50">{copiedSection === "story" ? "✓ Tersalin" : "Salin Story Saja"}</button>
+                {generatedMode === "carousel" && <>
+                  <button type="button" onClick={() => void shareCarousel()} disabled={!content || isSharing} className="min-h-11 rounded-lg bg-pink-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-gray-300">{isSharing ? "Menyiapkan foto…" : "Bagikan Foto + Caption"}</button>
+                  <button type="button" onClick={() => void downloadCarouselImages()} disabled={!content || isSharing} className="min-h-11 rounded-lg border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-bold text-pink-700 transition-colors hover:bg-pink-100 disabled:cursor-not-allowed disabled:opacity-50">Download Foto Carousel</button>
+                </>}
+                <a href={content ? getPlatformUrl("instagram") : undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!content} className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2 text-center text-sm font-bold text-white transition-colors ${content ? "bg-pink-600 hover:bg-pink-700" : "pointer-events-none bg-gray-300"}`}>Buka Instagram →</a>
+                <a href={content ? getPlatformUrl("tiktok") : undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!content} className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2 text-center text-sm font-bold text-white transition-colors ${content ? "bg-gray-900 hover:bg-black" : "pointer-events-none bg-gray-300"}`}>Buka TikTok →</a>
+              </div>
+            </>
+          )}
         </div>
 
         <aside className="h-fit rounded-xl border border-purple-100 bg-white/80 p-4">
           {generatedMode === "carousel" && <div className="mb-5"><p className="mb-3 text-xs font-black uppercase tracking-wider text-purple-800">Preview foto katalog</p>{previewProducts.length > 0 ? <div className="grid grid-cols-3 gap-2">{previewProducts.map((product) => <div key={product.id} className="overflow-hidden rounded-lg border border-gray-200 bg-gray-50">{product.image_url ? <img src={product.image_url} alt={getProductLabel(product)} className="aspect-square w-full object-cover" /> : <div className="flex aspect-square items-center justify-center p-2 text-center text-[10px] font-bold text-gray-400">Belum ada foto</div>}<p className="truncate px-1.5 py-1 text-[10px] font-bold text-gray-700">{getProductLabel(product)}</p></div>)}</div> : <div className="rounded-lg border border-dashed border-orange-300 bg-orange-50 p-3 text-xs leading-5 text-orange-800">Produk aktif belum punya foto. Isi URL foto di bagian Inventori agar carousel bisa langsung dipakai.</div>}</div>}
           <p className="mb-3 text-xs font-black uppercase tracking-wider text-purple-800">Data yang dipakai</p>
           <dl className="space-y-3 text-sm"><div className="flex items-center justify-between gap-3"><dt className="text-gray-500">Produk aktif &amp; ada stok</dt><dd className="font-black text-gray-900">{availableCount}</dd></div><div className="flex items-center justify-between gap-3"><dt className="text-gray-500">Produk aktif + foto</dt><dd className="font-black text-gray-900">{productsWithImagesCount}</dd></div><div className="flex items-center justify-between gap-3"><dt className="text-gray-500">Stok menipis (≤ 5)</dt><dd className={`font-black ${lowStockCount > 0 ? "text-orange-600" : "text-gray-900"}`}>{lowStockCount}</dd></div></dl>
-          <p className="mt-4 border-t border-gray-100 pt-3 text-xs leading-5 text-gray-500">{mode === "carousel" ? "Di HP yang mendukung Web Share, Bagikan Foto + Caption bisa membuka share sheet dengan beberapa foto sekaligus. Kalau nggak didukung, download foto lalu upload manual ke Instagram." : "Kalau bikin video nanti, pakai footage original tanpa watermark lalu upload manual ke TikTok dan Instagram Reels."}</p>
+          <p className="mt-4 border-t border-gray-100 pt-3 text-xs leading-5 text-gray-500">{mode === "carousel" ? "Di HP yang mendukung Web Share, Bagikan Foto + Caption bisa membuka share sheet dengan beberapa foto sekaligus. Kalau nggak didukung, download foto lalu upload manual ke Instagram." : mode === "slideshow" ? "Video dirender di browser—hasilnya file .webm siap didownload dan diupload manual." : "Kalau bikin video nanti, pakai footage original tanpa watermark lalu upload manual ke TikTok dan Instagram Reels."}</p>
         </aside>
       </div>
     </section>

@@ -36,6 +36,13 @@ const THEMES = {
     glow: 'bg-pink-300/30',
     arrow: 'text-pink-700 group-hover:bg-pink-600',
   },
+  amber: {
+    card: 'from-white via-white to-amber-50 border-amber-200/80',
+    icon: 'bg-gradient-to-br from-amber-400 to-orange-500',
+    eyebrow: 'text-amber-700 bg-amber-100',
+    glow: 'bg-amber-300/30',
+    arrow: 'text-amber-700 group-hover:bg-amber-600',
+  },
 } as const;
 
 export type DashboardModuleCardTheme = keyof typeof THEMES;

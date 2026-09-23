@@ -45,13 +45,17 @@ function fallbackFavorites(products: Product[]) {
     .slice(0, 3);
 }
 
+export type ProductSalesMap = Map<string, number>;
+
 /**
- * Sales ranking stays on the server. Orders that are still unpaid or canceled
- * never affect the public favorite-menu section.
+ * Total quantity sold per product id, counting only paid/completed orders,
+ * across the store's full order history (unlike the dashboard's orders list,
+ * which is capped to the most recent 50). Powers the admin sales report;
+ * also reused by getFavoriteMenus below so it isn't queried twice per
+ * dashboard load.
  */
-export async function getFavoriteMenus(products: Product[]): Promise<FavoriteMenu[]> {
-  const availableProducts = products.filter((product) => product.is_active && product.stock > 0);
-  if (availableProducts.length === 0) return [];
+export async function getProductSalesMap(): Promise<ProductSalesMap> {
+  const soldByProductId: ProductSalesMap = new Map();
 
   try {
     const { data, error } = await getSupabaseAdmin()
@@ -61,7 +65,6 @@ export async function getFavoriteMenus(products: Product[]): Promise<FavoriteMen
 
     if (error) throw error;
 
-    const soldByProductId = new Map<string, number>();
     for (const rawRow of (data ?? []) as unknown as SalesRow[]) {
       if (rawRow.status !== 'paid' && rawRow.status !== 'completed') continue;
       for (const item of rawRow.order_items ?? []) {
@@ -72,8 +75,28 @@ export async function getFavoriteMenus(products: Product[]): Promise<FavoriteMen
         }
       }
     }
+  } catch (error) {
+    console.error('Data penjualan produk gagal dimuat:', error);
+  }
 
-    const ranked = groupProducts(availableProducts, soldByProductId)
+  return soldByProductId;
+}
+
+/**
+ * Sales ranking stays on the server. Orders that are still unpaid or canceled
+ * never affect the public favorite-menu section.
+ *
+ * `soldByProductId`, if the caller already computed it (the admin data route
+ * needs the same map for the sales report), is reused instead of querying
+ * again; otherwise it's computed here.
+ */
+export async function getFavoriteMenus(products: Product[], soldByProductId?: ProductSalesMap): Promise<FavoriteMenu[]> {
+  const availableProducts = products.filter((product) => product.is_active && product.stock > 0);
+  if (availableProducts.length === 0) return [];
+
+  try {
+    const sales = soldByProductId ?? (await getProductSalesMap());
+    const ranked = groupProducts(availableProducts, sales)
       .sort((a, b) => b.soldQuantity - a.soldQuantity || a.label.localeCompare(b.label, 'id-ID'));
     const withSales = ranked.filter((menu) => menu.soldQuantity > 0).slice(0, 3);
     const selectedKeys = new Set(withSales.map((menu) => menu.key));

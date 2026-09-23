@@ -27,6 +27,7 @@ type AdminDataResponse = {
   products: Product[];
   totalRevenue: number;
   favoriteMenus: FavoriteMenu[];
+  productSales: Record<string, number>;
 };
 
 export type ProductInput = {
@@ -76,6 +77,7 @@ export function useAdminData(enabled: boolean) {
   const [products, setProducts] = useState<Product[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [favoriteMenus, setFavoriteMenus] = useState<FavoriteMenu[]>([]);
+  const [productSales, setProductSales] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -87,6 +89,7 @@ export function useAdminData(enabled: boolean) {
     setProducts(data.products);
     setTotalRevenue(Number(data.totalRevenue) || 0);
     setFavoriteMenus(Array.isArray(data.favoriteMenus) ? data.favoriteMenus : []);
+    setProductSales(data.productSales && typeof data.productSales === 'object' ? data.productSales : {});
   }, []);
 
   useEffect(() => {
@@ -156,6 +159,7 @@ export function useAdminData(enabled: boolean) {
     products,
     totalRevenue,
     favoriteMenus,
+    productSales,
     isLoading,
     fetchData,
     createProduct,
