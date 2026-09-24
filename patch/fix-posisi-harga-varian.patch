@@ -1,0 +1,49 @@
+diff --git a/src/components/admin/ProductEditForm.tsx b/src/components/admin/ProductEditForm.tsx
+index 0167695..95329d3 100644
+--- a/src/components/admin/ProductEditForm.tsx
++++ b/src/components/admin/ProductEditForm.tsx
+@@ -53,6 +53,19 @@ export default function ProductEditForm({ form, products, uploadingImage, isSavi
+     form.setField('name', target?.menuName ?? '');
+   };
+ 
++  const isConverting = !isVariant && convertMode !== 'off';
++
++  const priceStockFields = (
++    <section className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
++      <h5 className="mb-3 text-base font-black text-slate-950">{isConverting ? `Harga dan stok untuk varian "${form.value.variant_name || '...'}"` : 'Harga dan stok'}</h5>
++      <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
++        <label className="block"><span className={labelClass}>Harga jual</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="1" inputMode="numeric" className={`${inputClass} pl-10`} value={form.value.price || ''} onChange={(event) => form.setField('price', Number(event.target.value))} /></span></label>
++        <label className="block"><span className={labelClass}>Stok tersedia</span><input type="number" min="0" inputMode="numeric" className={inputClass} value={form.value.stock} onChange={(event) => form.setField('stock', Number(event.target.value))} /></label>
++        <label className="block"><span className={labelClass}>Modal (harga beli) <span className="font-semibold text-slate-400">(opsional)</span></span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="0" inputMode="numeric" className={`${inputClass} pl-10`} value={form.value.cost_price || ''} onChange={(event) => form.setField('cost_price', Number(event.target.value))} /></span><span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">Dipakai buat hitung keuntungan bersih di Modul Laporan.</span></label>
++      </div>
++    </section>
++  );
++
+   return (
+     <div className="-mx-1 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-[0_14px_35px_-28px_rgba(37,99,235,0.7)] sm:-mx-2">
+       <div className="bg-linear-to-r from-blue-700 to-cyan-600 px-4 py-4 text-white">
+@@ -94,14 +107,7 @@ export default function ProductEditForm({ form, products, uploadingImage, isSavi
+           </label>
+         </section>
+ 
+-        <section className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+-          <h5 className="mb-3 text-base font-black text-slate-950">Harga dan stok</h5>
+-          <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
+-            <label className="block"><span className={labelClass}>Harga jual</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="1" inputMode="numeric" className={`${inputClass} pl-10`} value={form.value.price || ''} onChange={(event) => form.setField('price', Number(event.target.value))} /></span></label>
+-            <label className="block"><span className={labelClass}>Stok tersedia</span><input type="number" min="0" inputMode="numeric" className={inputClass} value={form.value.stock} onChange={(event) => form.setField('stock', Number(event.target.value))} /></label>
+-            <label className="block"><span className={labelClass}>Modal (harga beli) <span className="font-semibold text-slate-400">(opsional)</span></span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="0" inputMode="numeric" className={`${inputClass} pl-10`} value={form.value.cost_price || ''} onChange={(event) => form.setField('cost_price', Number(event.target.value))} /></span><span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">Dipakai buat hitung keuntungan bersih di Modul Laporan.</span></label>
+-          </div>
+-        </section>
++        {!isConverting && priceStockFields}
+ 
+         {!isVariant && (
+           <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+@@ -151,6 +157,8 @@ export default function ProductEditForm({ form, products, uploadingImage, isSavi
+           </section>
+         )}
+ 
++        {isConverting && priceStockFields}
++
+         <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+           <div><h5 className="text-base font-black text-slate-950">Foto produk</h5><p className="mt-1 text-sm text-slate-600">Biarkan kalau fotonya nggak perlu diganti.</p></div>
+           <label className="block"><span className={labelClass}>Pilih foto baru</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={isBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) onUploadImage(file); }} className="block min-h-12 w-full cursor-pointer rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-700 file:mr-3 file:min-h-12 file:border-0 file:bg-slate-900 file:px-4 file:text-sm file:font-black file:text-white disabled:opacity-50" /></label>
