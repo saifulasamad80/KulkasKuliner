@@ -1,0 +1,49 @@
+diff --git a/src/app/api/admin/products/route.ts b/src/app/api/admin/products/route.ts
+index 2c1fb70..f6a6e2a 100755
+--- a/src/app/api/admin/products/route.ts
++++ b/src/app/api/admin/products/route.ts
+@@ -167,10 +167,16 @@ export async function POST(request: Request) {
+     return NextResponse.json({ product: data }, { status: 201 });
+   } catch (error) {
+     console.error('Produk gagal dibuat:', error);
+-    const databaseError = error as { code?: string };
++    const databaseError = error as { code?: string; message?: string };
+     if (databaseError?.code === 'P0001') {
+       return NextResponse.json({ error: 'Nama menu sudah dipakai. Edit menu yang ada atau gunakan nama lain.' }, { status: 409 });
+     }
++    if (databaseError?.code === '23505') {
++      return NextResponse.json({ error: 'Nama produk ini sudah dipakai produk lain. Gunakan nama lain, atau kalau ini varian dari menu yang sama, pakai opsi "Tambah ke menu yang sudah ada".' }, { status: 409 });
++    }
++    if (databaseError?.code === '23503') {
++      return NextResponse.json({ error: 'Menu induk tidak ditemukan. Muat ulang dashboard lalu coba lagi.' }, { status: 409 });
++    }
+     return NextResponse.json({ error: 'Produk gagal disimpan.' }, { status: 502 });
+   }
+ }
+diff --git a/supabase/migrations/20260924_fix_product_name_unique_constraint.sql b/supabase/migrations/20260924_fix_product_name_unique_constraint.sql
+new file mode 100644
+index 0000000..291213c
+--- /dev/null
++++ b/supabase/migrations/20260924_fix_product_name_unique_constraint.sql
+@@ -0,0 +1,21 @@
++-- Root cause of "duplicate key value violates unique constraint
++-- unique_product_name": the products table has a UNIQUE constraint on
++-- `name` alone, but every variant-menu row (create_variant_menu_atomic,
++-- and the newer "add variant to existing menu" feature) intentionally
++-- shares the SAME `name` across all its variants -- only `variant_name`
++-- differs per row. That's fundamental to how variant grouping works in
++-- this app (see getProductMenu / displayName logic on the frontend).
++--
++-- This constraint has likely been silently blocking creation of any
++-- genuinely new 2+ variant menu via create_variant_menu_atomic (the 2nd
++-- variant row in the same batch insert would collide with the 1st).
++--
++-- Fix: keep protecting against duplicate names for standalone (non-variant)
++-- products, but allow multiple rows to share a name once they're variants
++-- of the same menu (variant_name is not null).
++
++alter table public.products drop constraint if exists unique_product_name;
++
++create unique index if not exists unique_single_product_name
++  on public.products (name)
++  where variant_name is null;

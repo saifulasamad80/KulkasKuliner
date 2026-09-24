@@ -167,9 +167,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ product: data }, { status: 201 });
   } catch (error) {
     console.error('Produk gagal dibuat:', error);
-    const databaseError = error as { code?: string };
+    const databaseError = error as { code?: string; message?: string };
     if (databaseError?.code === 'P0001') {
       return NextResponse.json({ error: 'Nama menu sudah dipakai. Edit menu yang ada atau gunakan nama lain.' }, { status: 409 });
+    }
+    if (databaseError?.code === '23505') {
+      return NextResponse.json({ error: 'Nama produk ini sudah dipakai produk lain. Gunakan nama lain, atau kalau ini varian dari menu yang sama, pakai opsi "Tambah ke menu yang sudah ada".' }, { status: 409 });
+    }
+    if (databaseError?.code === '23503') {
+      return NextResponse.json({ error: 'Menu induk tidak ditemukan. Muat ulang dashboard lalu coba lagi.' }, { status: 409 });
     }
     return NextResponse.json({ error: 'Produk gagal disimpan.' }, { status: 502 });
   }
