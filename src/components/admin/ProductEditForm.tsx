@@ -57,7 +57,13 @@ export default function ProductEditForm({ form, products, uploadingImage, isSavi
 
   const priceStockFields = (
     <section className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-      <h5 className="mb-3 text-base font-black text-slate-950">{isConverting ? `Harga dan stok untuk varian "${form.value.variant_name || '...'}"` : 'Harga dan stok'}</h5>
+      <h5 className="mb-1 text-base font-black text-slate-950">{isConverting ? `Harga dan stok untuk varian "${form.value.variant_name || '(isi nama varian dulu)'}"` : 'Harga dan stok'}</h5>
+      {isConverting && (
+        <p className="mb-3 text-xs leading-5 text-amber-700">
+          Ini cuma buat 1 varian (yang lagi dibuat sekarang). Simpan dulu, baru tambahkan varian lain lewat
+          {' '}<span className="font-black">&quot;+ Tambah Produk&quot; → &quot;Tambah ke menu yang sudah ada&quot;</span> — tiap varian boleh beda harga jual dan modal.
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
         <label className="block"><span className={labelClass}>Harga jual</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="1" inputMode="numeric" className={`${inputClass} pl-10`} value={form.value.price || ''} onChange={(event) => form.setField('price', Number(event.target.value))} /></span></label>
         <label className="block"><span className={labelClass}>Stok tersedia</span><input type="number" min="0" inputMode="numeric" className={inputClass} value={form.value.stock} onChange={(event) => form.setField('stock', Number(event.target.value))} /></label>

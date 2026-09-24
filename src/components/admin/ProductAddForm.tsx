@@ -189,7 +189,7 @@ export default function ProductAddForm({ form, products, uploadingImage, isSavin
 
             {existingMenus.length > 0 && (
               <section aria-labelledby="existing-variant-heading" className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-                <div className="mb-4"><p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Langkah 3</p><h5 id="existing-variant-heading" className="text-lg font-black text-slate-950">Varian baru</h5></div>
+                <div className="mb-4"><p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Langkah 3</p><h5 id="existing-variant-heading" className="text-lg font-black text-slate-950">Varian baru</h5><p className="mt-1 text-xs leading-5 text-slate-600">Harga jual dan modal di bawah cuma buat varian ini — nggak ngubah harga varian lain di menu yang sama.</p></div>
                 <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2">
                   <label className="block min-[480px]:col-span-2"><span className={labelClass}>Nama varian</span><input type="text" required maxLength={120} placeholder="Contoh: Crispy Karage" className={inputClass} value={form.value.variant_name} onChange={(event) => form.setField('variant_name', event.target.value)} /></label>
                   <label className="block"><span className={labelClass}>Harga jual</span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" required min="1" inputMode="numeric" placeholder="25000" className={`${inputClass} pl-10`} value={form.value.price || ''} onChange={(event) => form.setField('price', Number(event.target.value))} /></span></label>
