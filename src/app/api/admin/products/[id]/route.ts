@@ -164,6 +164,25 @@ export async function PATCH(
       delete rest.menu_name;
       productPatch = { ...rest, menu_id: menuId };
     }
+
+    if (productPatch.menu_id && productPatch.variant_name) {
+      const { data: siblingVariants, error: siblingError } = await admin
+        .from('products')
+        .select('id, variant_name')
+        .eq('menu_id', productPatch.menu_id);
+      if (siblingError) throw siblingError;
+      const normalizedNew = productPatch.variant_name.toLocaleLowerCase('id-ID');
+      const isDuplicate = (siblingVariants ?? []).some(
+        (sibling) =>
+          sibling.id !== id &&
+          typeof sibling.variant_name === 'string' &&
+          sibling.variant_name.toLocaleLowerCase('id-ID') === normalizedNew
+      );
+      if (isDuplicate) {
+        return NextResponse.json({ error: `Varian "${productPatch.variant_name}" sudah ada di menu ini. Pakai nama lain.` }, { status: 409 });
+      }
+    }
+
     const { data, error } = await admin
       .from('products')
       .update(productPatch)

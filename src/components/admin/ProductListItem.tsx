@@ -7,6 +7,7 @@ import ProductEditForm from './ProductEditForm';
 
 type ProductListItemProps = {
   product: Product;
+  products: Product[];
   isEditing: boolean;
   editForm: ReturnType<typeof useProductForm>;
   uploadingImage: boolean;
@@ -22,6 +23,7 @@ type ProductListItemProps = {
 
 export default function ProductListItem({
   product,
+  products,
   isEditing,
   editForm,
   uploadingImage,
@@ -42,6 +44,7 @@ export default function ProductListItem({
       {isEditing ? (
         <ProductEditForm
           form={editForm}
+          products={products}
           uploadingImage={uploadingImage}
           isSaving={isSaving}
           isVariant={Boolean(product.variant_name)}

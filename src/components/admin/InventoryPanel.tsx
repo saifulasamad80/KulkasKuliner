@@ -86,9 +86,12 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
     if (editForm.value.name.trim().length < 2 || editForm.value.price <= 0 || editForm.value.stock < 0) {
       return alert('Nama, harga, dan stok belum valid. Cek lagi sebelum menyimpan.');
     }
+    const isConverting = editForm.value.menu_name.trim().length > 0 || Boolean(editForm.value.menu_id);
+    if (isConverting && !editForm.value.variant_name.trim()) {
+      return alert('Isi nama varian buat produk ini sebelum menyimpan.');
+    }
     setIsSaving(true);
     try {
-      const editedProduct = products.find((product) => product.id === id);
       const input: ProductInput = {
         name: editForm.value.name,
         price: editForm.value.price,
@@ -99,10 +102,12 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
         menu_id: editForm.value.menu_id,
         variant_name: editForm.value.variant_name || null,
       };
-      // Menu induk cuma boleh berubah lewat editor varian. Edit produk biasa
-      // jangan mengirim menu_name kosong karena itu akan melepas menu_id lama.
-      if (editedProduct?.variant_name) {
-        input.menu_name = editForm.value.menu_name || null;
+      // menu_name (kalau diisi) selalu menang atas menu_id di backend -- cuma
+      // kirim kalau memang diisi, biar edit produk biasa yang nggak nyentuh
+      // pengelompokan menu nggak sengaja melepas menu_id yang sudah diset
+      // lewat opsi "Gabung ke Menu yang Ada".
+      if (editForm.value.menu_name.trim()) {
+        input.menu_name = editForm.value.menu_name.trim();
       }
       await updateProduct(id, input);
       setEditingId(null);
@@ -208,6 +213,7 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
             <ProductListItem
               key={product.id}
               product={product}
+              products={products}
               isEditing={editingId === product.id}
               editForm={editForm}
               uploadingImage={uploadingImage}

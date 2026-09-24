@@ -1,9 +1,13 @@
 "use client";
 
+import { useState } from 'react';
+import type { Product } from '@/lib/types';
+import { getExistingMenuOptions } from '@/lib/product-menus';
 import type { useProductForm } from '@/hooks/useProductForm';
 
 type ProductEditFormProps = {
   form: ReturnType<typeof useProductForm>;
+  products: Product[];
   uploadingImage: boolean;
   isSaving: boolean;
   isVariant: boolean;
@@ -12,11 +16,42 @@ type ProductEditFormProps = {
   onUploadImage: (file: File) => void;
 };
 
+type ConvertMode = 'off' | 'new' | 'existing';
+
 const inputClass = 'min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base font-semibold text-slate-950 placeholder:text-slate-400 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100';
 const labelClass = 'mb-1.5 block text-sm font-black text-slate-800';
 
-export default function ProductEditForm({ form, uploadingImage, isSaving, isVariant, onSave, onCancel, onUploadImage }: ProductEditFormProps) {
+export default function ProductEditForm({ form, products, uploadingImage, isSaving, isVariant, onSave, onCancel, onUploadImage }: ProductEditFormProps) {
+  const [convertMode, setConvertMode] = useState<ConvertMode>('off');
   const isBusy = uploadingImage || isSaving;
+  const existingMenus = getExistingMenuOptions(products);
+
+  const startConvert = (nextMode: 'new' | 'existing') => {
+    setConvertMode(nextMode);
+    form.setField('variant_name', '');
+    if (nextMode === 'new') {
+      form.setField('menu_id', null);
+      form.setField('menu_name', form.value.name);
+    } else {
+      const target = existingMenus[0] ?? null;
+      form.setField('menu_id', target?.menuId ?? null);
+      form.setField('menu_name', '');
+      if (target) form.setField('name', target.menuName);
+    }
+  };
+
+  const cancelConvert = () => {
+    setConvertMode('off');
+    form.setField('variant_name', '');
+    form.setField('menu_name', '');
+    form.setField('menu_id', null);
+  };
+
+  const changeConvertMenu = (menuId: string) => {
+    const target = existingMenus.find((menu) => menu.menuId === menuId) ?? null;
+    form.setField('menu_id', menuId);
+    form.setField('name', target?.menuName ?? '');
+  };
 
   return (
     <div className="-mx-1 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-[0_14px_35px_-28px_rgba(37,99,235,0.7)] sm:-mx-2">
@@ -67,6 +102,54 @@ export default function ProductEditForm({ form, uploadingImage, isSaving, isVari
             <label className="block"><span className={labelClass}>Modal (harga beli) <span className="font-semibold text-slate-400">(opsional)</span></span><span className="relative block"><span className="pointer-events-none absolute left-3.5 top-3.5 text-sm font-black text-slate-500">Rp</span><input type="number" min="0" inputMode="numeric" className={`${inputClass} pl-10`} value={form.value.cost_price || ''} onChange={(event) => form.setField('cost_price', Number(event.target.value))} /></span><span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">Dipakai buat hitung keuntungan bersih di Modul Laporan.</span></label>
           </div>
         </section>
+
+        {!isVariant && (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+            {convertMode === 'off' ? (
+              <>
+                <h5 className="mb-1 text-sm font-black text-slate-900">🔗 Jadikan bagian dari menu bervarian?</h5>
+                <p className="mb-3 text-xs leading-5 text-slate-600">Kalau ternyata produk ini punya beberapa pilihan rasa/ukuran, gabungkan jadi satu menu bervarian tanpa kehilangan riwayat pesanan produk ini.</p>
+                <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
+                  <button type="button" onClick={() => startConvert('new')} className="min-h-11 rounded-xl border-2 border-amber-300 bg-white px-3 text-sm font-black text-amber-800 transition hover:bg-amber-100">+ Menu Bervarian Baru</button>
+                  {existingMenus.length > 0 && (
+                    <button type="button" onClick={() => startConvert('existing')} className="min-h-11 rounded-xl border-2 border-amber-300 bg-white px-3 text-sm font-black text-amber-800 transition hover:bg-amber-100">Gabung ke Menu yang Ada</button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h5 className="text-sm font-black text-slate-900">{convertMode === 'new' ? '🔗 Menu bervarian baru' : '🔗 Gabung ke menu yang ada'}</h5>
+                  <button type="button" onClick={cancelConvert} className="text-xs font-black text-slate-500 underline hover:text-slate-700">Batal</button>
+                </div>
+                {convertMode === 'new' ? (
+                  <label className="mb-3 block">
+                    <span className={labelClass}>Nama menu</span>
+                    <input type="text" maxLength={120} placeholder="Contoh: Beef Slice" className={inputClass} value={form.value.menu_name} onChange={(event) => { form.setField('menu_name', event.target.value); form.setField('name', event.target.value); }} />
+                  </label>
+                ) : (
+                  <label className="mb-3 block">
+                    <span className={labelClass}>Menu induk</span>
+                    <select className={inputClass} value={form.value.menu_id ?? ''} onChange={(event) => changeConvertMenu(event.target.value)}>
+                      {existingMenus.map((menu) => (
+                        <option key={menu.menuId} value={menu.menuId}>{menu.menuName} ({menu.existingVariantNames.length} varian)</option>
+                      ))}
+                    </select>
+                    {form.value.menu_id && (
+                      <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">
+                        Varian yang sudah ada: {existingMenus.find((menu) => menu.menuId === form.value.menu_id)?.existingVariantNames.join(', ')}
+                      </span>
+                    )}
+                  </label>
+                )}
+                <label className="block">
+                  <span className={labelClass}>Nama varian buat produk ini</span>
+                  <input type="text" maxLength={120} placeholder="Contoh: Yoshinoya" className={inputClass} value={form.value.variant_name} onChange={(event) => form.setField('variant_name', event.target.value)} />
+                </label>
+              </>
+            )}
+          </section>
+        )}
 
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div><h5 className="text-base font-black text-slate-950">Foto produk</h5><p className="mt-1 text-sm text-slate-600">Biarkan kalau fotonya nggak perlu diganti.</p></div>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from 'react';
-import { getProductMenu, type Product } from '@/lib/types';
+import { type Product } from '@/lib/types';
+import { getExistingMenuOptions } from '@/lib/product-menus';
 import type { CreateProductInput, ProductVariantInput } from '@/hooks/useAdminData';
 import type { useProductForm } from '@/hooks/useProductForm';
 
@@ -16,35 +17,12 @@ type ProductAddFormProps = {
 
 type MenuMode = 'single' | 'variants' | 'existing';
 type VariantDraft = ProductVariantInput & { id: number };
-type ExistingMenuOption = { menuId: string; menuName: string; imageUrl: string; description: string; existingVariantNames: string[] };
 
 const inputClass = 'min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base font-semibold text-slate-950 placeholder:text-slate-400 outline-none transition focus:border-green-600 focus:ring-4 focus:ring-green-100';
 const labelClass = 'mb-1.5 block text-sm font-black text-slate-800';
 
 function createVariant(id: number): VariantDraft {
   return { id, variant_name: '', price: 0, stock: 0, cost_price: 0 };
-}
-
-/** Menus that already have at least one variant product, so a new one can be added alongside it. */
-function getExistingMenuOptions(products: Product[]): ExistingMenuOption[] {
-  const byMenu = new Map<string, ExistingMenuOption>();
-  for (const product of products) {
-    if (!product.variant_name || !product.menu_id) continue;
-    const menu = getProductMenu(product);
-    const existing = byMenu.get(product.menu_id);
-    if (existing) {
-      existing.existingVariantNames.push(product.variant_name);
-      continue;
-    }
-    byMenu.set(product.menu_id, {
-      menuId: product.menu_id,
-      menuName: menu?.name || product.name,
-      imageUrl: menu?.image_url || product.image_url || '',
-      description: menu?.description || product.description || '',
-      existingVariantNames: [product.variant_name],
-    });
-  }
-  return Array.from(byMenu.values()).sort((a, b) => a.menuName.localeCompare(b.menuName, 'id-ID'));
 }
 
 export default function ProductAddForm({ form, products, uploadingImage, isSaving, onSubmit, onUploadImage }: ProductAddFormProps) {

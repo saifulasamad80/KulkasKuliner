@@ -1,0 +1,313 @@
+diff --git a/src/app/api/admin/products/[id]/route.ts b/src/app/api/admin/products/[id]/route.ts
+index 2ae0d91..ea24202 100755
+--- a/src/app/api/admin/products/[id]/route.ts
++++ b/src/app/api/admin/products/[id]/route.ts
+@@ -164,6 +164,25 @@ export async function PATCH(
+       delete rest.menu_name;
+       productPatch = { ...rest, menu_id: menuId };
+     }
++
++    if (productPatch.menu_id && productPatch.variant_name) {
++      const { data: siblingVariants, error: siblingError } = await admin
++        .from('products')
++        .select('id, variant_name')
++        .eq('menu_id', productPatch.menu_id);
++      if (siblingError) throw siblingError;
++      const normalizedNew = productPatch.variant_name.toLocaleLowerCase('id-ID');
++      const isDuplicate = (siblingVariants ?? []).some(
++        (sibling) =>
++          sibling.id !== id &&
++          typeof sibling.variant_name === 'string' &&
++          sibling.variant_name.toLocaleLowerCase('id-ID') === normalizedNew
++      );
++      if (isDuplicate) {
++        return NextResponse.json({ error: `Varian "${productPatch.variant_name}" sudah ada di menu ini. Pakai nama lain.` }, { status: 409 });
++      }
++    }
++
+     const { data, error } = await admin
+       .from('products')
+       .update(productPatch)
+diff --git a/src/components/admin/InventoryPanel.tsx b/src/components/admin/InventoryPanel.tsx
+index 04d3b74..8dd0571 100755
+--- a/src/components/admin/InventoryPanel.tsx
++++ b/src/components/admin/InventoryPanel.tsx
+@@ -86,9 +86,12 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
+     if (editForm.value.name.trim().length < 2 || editForm.value.price <= 0 || editForm.value.stock < 0) {
+       return alert('Nama, harga, dan stok belum valid. Cek lagi sebelum menyimpan.');
+     }
++    const isConverting = editForm.value.menu_name.trim().length > 0 || Boolean(editForm.value.menu_id);
++    if (isConverting && !editForm.value.variant_name.trim()) {
++      return alert('Isi nama varian buat produk ini sebelum menyimpan.');
++    }
+     setIsSaving(true);
+     try {
+-      const editedProduct = products.find((product) => product.id === id);
+       const input: ProductInput = {
+         name: editForm.value.name,
+         price: editForm.value.price,
+@@ -99,10 +102,12 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
+         menu_id: editForm.value.menu_id,
+         variant_name: editForm.value.variant_name || null,
+       };
+-      // Menu induk cuma boleh berubah lewat editor varian. Edit produk biasa
+-      // jangan mengirim menu_name kosong karena itu akan melepas menu_id lama.
+-      if (editedProduct?.variant_name) {
+-        input.menu_name = editForm.value.menu_name || null;
++      // menu_name (kalau diisi) selalu menang atas menu_id di backend -- cuma
++      // kirim kalau memang diisi, biar edit produk biasa yang nggak nyentuh
++      // pengelompokan menu nggak sengaja melepas menu_id yang sudah diset
++      // lewat opsi "Gabung ke Menu yang Ada".
++      if (editForm.value.menu_name.trim()) {
++        input.menu_name = editForm.value.menu_name.trim();
+       }
+       await updateProduct(id, input);
+       setEditingId(null);
+@@ -208,6 +213,7 @@ export default function InventoryPanel({ products, createProduct, updateProduct,
+             <ProductListItem
+               key={product.id}
+               product={product}
++              products={products}
+               isEditing={editingId === product.id}
+               editForm={editForm}
+               uploadingImage={uploadingImage}
+diff --git a/src/components/admin/ProductAddForm.tsx b/src/components/admin/ProductAddForm.tsx
+index 35b448a..087711a 100644
+--- a/src/components/admin/ProductAddForm.tsx
++++ b/src/components/admin/ProductAddForm.tsx
+@@ -1,7 +1,8 @@
+ "use client";
+ 
+ import { useState } from 'react';
+-import { getProductMenu, type Product } from '@/lib/types';
++import { type Product } from '@/lib/types';
++import { getExistingMenuOptions } from '@/lib/product-menus';
+ import type { CreateProductInput, ProductVariantInput } from '@/hooks/useAdminData';
+ import type { useProductForm } from '@/hooks/useProductForm';
+ 
+@@ -16,7 +17,6 @@ type ProductAddFormProps = {
+ 
+ type MenuMode = 'single' | 'variants' | 'existing';
+ type VariantDraft = ProductVariantInput & { id: number };
+-type ExistingMenuOption = { menuId: string; menuName: string; imageUrl: string; description: string; existingVariantNames: string[] };
+ 
+ const inputClass = 'min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base font-semibold text-slate-950 placeholder:text-slate-400 outline-none transition focus:border-green-600 focus:ring-4 focus:ring-green-100';
+ const labelClass = 'mb-1.5 block text-sm font-black text-slate-800';
+@@ -25,28 +25,6 @@ function createVariant(id: number): VariantDraft {
+   return { id, variant_name: '', price: 0, stock: 0, cost_price: 0 };
+ }
+ 
+-/** Menus that already have at least one variant product, so a new one can be added alongside it. */
+-function getExistingMenuOptions(products: Product[]): ExistingMenuOption[] {
+-  const byMenu = new Map<string, ExistingMenuOption>();
+-  for (const product of products) {
+-    if (!product.variant_name || !product.menu_id) continue;
+-    const menu = getProductMenu(product);
+-    const existing = byMenu.get(product.menu_id);
+-    if (existing) {
+-      existing.existingVariantNames.push(product.variant_name);
+-      continue;
+-    }
+-    byMenu.set(product.menu_id, {
+-      menuId: product.menu_id,
+-      menuName: menu?.name || product.name,
+-      imageUrl: menu?.image_url || product.image_url || '',
+-      description: menu?.description || product.description || '',
+-      existingVariantNames: [product.variant_name],
+-    });
+-  }
+-  return Array.from(byMenu.values()).sort((a, b) => a.menuName.localeCompare(b.menuName, 'id-ID'));
+-}
+-
+ export default function ProductAddForm({ form, products, uploadingImage, isSaving, onSubmit, onUploadImage }: ProductAddFormProps) {
+   const [mode, setMode] = useState<MenuMode>('single');
+   const [variants, setVariants] = useState<VariantDraft[]>([createVariant(1), createVariant(2)]);
+diff --git a/src/components/admin/ProductEditForm.tsx b/src/components/admin/ProductEditForm.tsx
+index 422cad5..0167695 100644
+--- a/src/components/admin/ProductEditForm.tsx
++++ b/src/components/admin/ProductEditForm.tsx
+@@ -1,9 +1,13 @@
+ "use client";
+ 
++import { useState } from 'react';
++import type { Product } from '@/lib/types';
++import { getExistingMenuOptions } from '@/lib/product-menus';
+ import type { useProductForm } from '@/hooks/useProductForm';
+ 
+ type ProductEditFormProps = {
+   form: ReturnType<typeof useProductForm>;
++  products: Product[];
+   uploadingImage: boolean;
+   isSaving: boolean;
+   isVariant: boolean;
+@@ -12,11 +16,42 @@ type ProductEditFormProps = {
+   onUploadImage: (file: File) => void;
+ };
+ 
++type ConvertMode = 'off' | 'new' | 'existing';
++
+ const inputClass = 'min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-base font-semibold text-slate-950 placeholder:text-slate-400 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100';
+ const labelClass = 'mb-1.5 block text-sm font-black text-slate-800';
+ 
+-export default function ProductEditForm({ form, uploadingImage, isSaving, isVariant, onSave, onCancel, onUploadImage }: ProductEditFormProps) {
++export default function ProductEditForm({ form, products, uploadingImage, isSaving, isVariant, onSave, onCancel, onUploadImage }: ProductEditFormProps) {
++  const [convertMode, setConvertMode] = useState<ConvertMode>('off');
+   const isBusy = uploadingImage || isSaving;
++  const existingMenus = getExistingMenuOptions(products);
++
++  const startConvert = (nextMode: 'new' | 'existing') => {
++    setConvertMode(nextMode);
++    form.setField('variant_name', '');
++    if (nextMode === 'new') {
++      form.setField('menu_id', null);
++      form.setField('menu_name', form.value.name);
++    } else {
++      const target = existingMenus[0] ?? null;
++      form.setField('menu_id', target?.menuId ?? null);
++      form.setField('menu_name', '');
++      if (target) form.setField('name', target.menuName);
++    }
++  };
++
++  const cancelConvert = () => {
++    setConvertMode('off');
++    form.setField('variant_name', '');
++    form.setField('menu_name', '');
++    form.setField('menu_id', null);
++  };
++
++  const changeConvertMenu = (menuId: string) => {
++    const target = existingMenus.find((menu) => menu.menuId === menuId) ?? null;
++    form.setField('menu_id', menuId);
++    form.setField('name', target?.menuName ?? '');
++  };
+ 
+   return (
+     <div className="-mx-1 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-[0_14px_35px_-28px_rgba(37,99,235,0.7)] sm:-mx-2">
+@@ -68,6 +103,54 @@ export default function ProductEditForm({ form, uploadingImage, isSaving, isVari
+           </div>
+         </section>
+ 
++        {!isVariant && (
++          <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
++            {convertMode === 'off' ? (
++              <>
++                <h5 className="mb-1 text-sm font-black text-slate-900">🔗 Jadikan bagian dari menu bervarian?</h5>
++                <p className="mb-3 text-xs leading-5 text-slate-600">Kalau ternyata produk ini punya beberapa pilihan rasa/ukuran, gabungkan jadi satu menu bervarian tanpa kehilangan riwayat pesanan produk ini.</p>
++                <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
++                  <button type="button" onClick={() => startConvert('new')} className="min-h-11 rounded-xl border-2 border-amber-300 bg-white px-3 text-sm font-black text-amber-800 transition hover:bg-amber-100">+ Menu Bervarian Baru</button>
++                  {existingMenus.length > 0 && (
++                    <button type="button" onClick={() => startConvert('existing')} className="min-h-11 rounded-xl border-2 border-amber-300 bg-white px-3 text-sm font-black text-amber-800 transition hover:bg-amber-100">Gabung ke Menu yang Ada</button>
++                  )}
++                </div>
++              </>
++            ) : (
++              <>
++                <div className="mb-3 flex items-center justify-between gap-3">
++                  <h5 className="text-sm font-black text-slate-900">{convertMode === 'new' ? '🔗 Menu bervarian baru' : '🔗 Gabung ke menu yang ada'}</h5>
++                  <button type="button" onClick={cancelConvert} className="text-xs font-black text-slate-500 underline hover:text-slate-700">Batal</button>
++                </div>
++                {convertMode === 'new' ? (
++                  <label className="mb-3 block">
++                    <span className={labelClass}>Nama menu</span>
++                    <input type="text" maxLength={120} placeholder="Contoh: Beef Slice" className={inputClass} value={form.value.menu_name} onChange={(event) => { form.setField('menu_name', event.target.value); form.setField('name', event.target.value); }} />
++                  </label>
++                ) : (
++                  <label className="mb-3 block">
++                    <span className={labelClass}>Menu induk</span>
++                    <select className={inputClass} value={form.value.menu_id ?? ''} onChange={(event) => changeConvertMenu(event.target.value)}>
++                      {existingMenus.map((menu) => (
++                        <option key={menu.menuId} value={menu.menuId}>{menu.menuName} ({menu.existingVariantNames.length} varian)</option>
++                      ))}
++                    </select>
++                    {form.value.menu_id && (
++                      <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">
++                        Varian yang sudah ada: {existingMenus.find((menu) => menu.menuId === form.value.menu_id)?.existingVariantNames.join(', ')}
++                      </span>
++                    )}
++                  </label>
++                )}
++                <label className="block">
++                  <span className={labelClass}>Nama varian buat produk ini</span>
++                  <input type="text" maxLength={120} placeholder="Contoh: Yoshinoya" className={inputClass} value={form.value.variant_name} onChange={(event) => form.setField('variant_name', event.target.value)} />
++                </label>
++              </>
++            )}
++          </section>
++        )}
++
+         <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+           <div><h5 className="text-base font-black text-slate-950">Foto produk</h5><p className="mt-1 text-sm text-slate-600">Biarkan kalau fotonya nggak perlu diganti.</p></div>
+           <label className="block"><span className={labelClass}>Pilih foto baru</span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={isBusy} onChange={(event) => { const file = event.target.files?.[0]; if (file) onUploadImage(file); }} className="block min-h-12 w-full cursor-pointer rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-700 file:mr-3 file:min-h-12 file:border-0 file:bg-slate-900 file:px-4 file:text-sm file:font-black file:text-white disabled:opacity-50" /></label>
+@@ -82,4 +165,4 @@ export default function ProductEditForm({ form, uploadingImage, isSaving, isVari
+       </div>
+     </div>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/src/components/admin/ProductListItem.tsx b/src/components/admin/ProductListItem.tsx
+index 842e233..92a0294 100755
+--- a/src/components/admin/ProductListItem.tsx
++++ b/src/components/admin/ProductListItem.tsx
+@@ -7,6 +7,7 @@ import ProductEditForm from './ProductEditForm';
+ 
+ type ProductListItemProps = {
+   product: Product;
++  products: Product[];
+   isEditing: boolean;
+   editForm: ReturnType<typeof useProductForm>;
+   uploadingImage: boolean;
+@@ -22,6 +23,7 @@ type ProductListItemProps = {
+ 
+ export default function ProductListItem({
+   product,
++  products,
+   isEditing,
+   editForm,
+   uploadingImage,
+@@ -42,6 +44,7 @@ export default function ProductListItem({
+       {isEditing ? (
+         <ProductEditForm
+           form={editForm}
++          products={products}
+           uploadingImage={uploadingImage}
+           isSaving={isSaving}
+           isVariant={Boolean(product.variant_name)}
+diff --git a/src/lib/product-menus.ts b/src/lib/product-menus.ts
+new file mode 100644
+index 0000000..af0b25a
+--- /dev/null
++++ b/src/lib/product-menus.ts
+@@ -0,0 +1,31 @@
++import { getProductMenu, type Product } from '@/lib/types';
++
++export type ExistingMenuOption = {
++  menuId: string;
++  menuName: string;
++  imageUrl: string;
++  description: string;
++  existingVariantNames: string[];
++};
++
++/** Menus that already have at least one variant product, so another one can be added alongside it. */
++export function getExistingMenuOptions(products: Product[]): ExistingMenuOption[] {
++  const byMenu = new Map<string, ExistingMenuOption>();
++  for (const product of products) {
++    if (!product.variant_name || !product.menu_id) continue;
++    const menu = getProductMenu(product);
++    const existing = byMenu.get(product.menu_id);
++    if (existing) {
++      existing.existingVariantNames.push(product.variant_name);
++      continue;
++    }
++    byMenu.set(product.menu_id, {
++      menuId: product.menu_id,
++      menuName: menu?.name || product.name,
++      imageUrl: menu?.image_url || product.image_url || '',
++      description: menu?.description || product.description || '',
++      existingVariantNames: [product.variant_name],
++    });
++  }
++  return Array.from(byMenu.values()).sort((a, b) => a.menuName.localeCompare(b.menuName, 'id-ID'));
++}
