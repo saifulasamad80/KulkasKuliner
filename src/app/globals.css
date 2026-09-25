@@ -48,3 +48,25 @@ body {
   background: #f3b49f;
   border-radius: 999px;
 }
+
+/*
+ * Font dashboard admin dibesarkan -- penggunanya lansia dan pakai kacamata.
+ * Cuma berlaku di dalam .admin-dashboard (dipasang di root layar admin),
+ * jadi katalog publik nggak ikut berubah. Menyasar tiap ukuran teks
+ * Tailwind yang benar-benar dipakai di dashboard admin, dari yang paling
+ * kecil (badge) sampai judul section -- angka besar (text-3xl/4xl) sengaja
+ * dibiarkan karena memang sudah menonjol.
+ */
+.admin-dashboard {
+  font-size: 1.0625rem; /* ~17px, base body sedikit lebih besar dari default browser */
+}
+
+.admin-dashboard .text-\[10px\] { font-size: 13px !important; }
+.admin-dashboard .text-\[11px\] { font-size: 14px !important; }
+.admin-dashboard .text-xs { font-size: 0.9375rem !important; line-height: 1.45 !important; }   /* 12px -> 15px */
+.admin-dashboard .text-sm { font-size: 1.0625rem !important; line-height: 1.55 !important; }   /* 14px -> 17px */
+.admin-dashboard .text-base { font-size: 1.125rem !important; line-height: 1.6 !important; }   /* 16px -> 18px */
+.admin-dashboard .text-lg { font-size: 1.25rem !important; line-height: 1.55 !important; }     /* 18px -> 20px */
+.admin-dashboard .text-xl { font-size: 1.375rem !important; line-height: 1.45 !important; }    /* 20px -> 22px */
+.admin-dashboard .text-2xl { font-size: 1.625rem !important; line-height: 1.3 !important; }    /* 24px -> 26px */
+.admin-dashboard .text-3xl { font-size: 2rem !important; line-height: 1.25 !important; }       /* 30px -> 32px */

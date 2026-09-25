@@ -24,7 +24,7 @@ export default function AdminDashboard() {
   const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
 
   if (isCheckingAuth) {
-    return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-white">Verifikasi Keamanan...</p></div>;
+    return <div className="admin-dashboard min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-white">Verifikasi Keamanan...</p></div>;
   }
 
   if (!isAuthenticated) {
@@ -39,7 +39,7 @@ export default function AdminDashboard() {
   }
 
   if (isLoading) {
-    return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-xl text-gray-500">Memuat Data Dashboard...</div>;
+    return <div className="admin-dashboard min-h-screen bg-gray-50 flex items-center justify-center font-bold text-xl text-gray-500">Memuat Data Dashboard...</div>;
   }
 
   const pendingOrderCount = orders.filter((order) => order.status === 'unpaid').length;
@@ -47,7 +47,7 @@ export default function AdminDashboard() {
   const lowStockCount = products.filter((product) => product.stock <= 5).length;
 
   return (
-    <main className="min-h-screen bg-[#f4f6f8]">
+    <main className="admin-dashboard min-h-screen bg-[#f4f6f8]">
       <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
         <AdminHeader totalRevenue={totalRevenue} onLogout={logout} />
 

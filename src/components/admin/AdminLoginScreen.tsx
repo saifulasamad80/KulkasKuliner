@@ -11,7 +11,7 @@ type AdminLoginScreenProps = {
 
 export default function AdminLoginScreen({ pinInput, isVerifying, onPinChange, onSubmit }: AdminLoginScreenProps) {
   return (
-    <main className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
+    <main className="admin-dashboard min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full border-t-8 border-red-600">
         <h1 className="text-2xl font-black text-gray-900 mb-2 text-center">Area Terlarang</h1>
         <p className="text-sm text-gray-500 mb-6 text-center">Masukkan PIN Operasional untuk mengakses Dashboard KulkasKuliner.</p>

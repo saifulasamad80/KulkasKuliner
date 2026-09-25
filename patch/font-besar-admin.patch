@@ -1,0 +1,74 @@
+diff --git a/src/app/admin/page.tsx b/src/app/admin/page.tsx
+index df53773..67d7a36 100755
+--- a/src/app/admin/page.tsx
++++ b/src/app/admin/page.tsx
+@@ -24,7 +24,7 @@ export default function AdminDashboard() {
+   const [activeModule, setActiveModule] = useState<ModuleKey | null>(null);
+ 
+   if (isCheckingAuth) {
+-    return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-white">Verifikasi Keamanan...</p></div>;
++    return <div className="admin-dashboard min-h-screen bg-gray-900 flex items-center justify-center"><p className="text-white">Verifikasi Keamanan...</p></div>;
+   }
+ 
+   if (!isAuthenticated) {
+@@ -39,7 +39,7 @@ export default function AdminDashboard() {
+   }
+ 
+   if (isLoading) {
+-    return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-xl text-gray-500">Memuat Data Dashboard...</div>;
++    return <div className="admin-dashboard min-h-screen bg-gray-50 flex items-center justify-center font-bold text-xl text-gray-500">Memuat Data Dashboard...</div>;
+   }
+ 
+   const pendingOrderCount = orders.filter((order) => order.status === 'unpaid').length;
+@@ -47,7 +47,7 @@ export default function AdminDashboard() {
+   const lowStockCount = products.filter((product) => product.stock <= 5).length;
+ 
+   return (
+-    <main className="min-h-screen bg-[#f4f6f8]">
++    <main className="admin-dashboard min-h-screen bg-[#f4f6f8]">
+       <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+         <AdminHeader totalRevenue={totalRevenue} onLogout={logout} />
+ 
+diff --git a/src/app/globals.css b/src/app/globals.css
+index eec3f0a..ac2f140 100755
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -48,3 +48,25 @@ body {
+   background: #f3b49f;
+   border-radius: 999px;
+ }
++
++/*
++ * Font dashboard admin dibesarkan -- penggunanya lansia dan pakai kacamata.
++ * Cuma berlaku di dalam .admin-dashboard (dipasang di root layar admin),
++ * jadi katalog publik nggak ikut berubah. Menyasar tiap ukuran teks
++ * Tailwind yang benar-benar dipakai di dashboard admin, dari yang paling
++ * kecil (badge) sampai judul section -- angka besar (text-3xl/4xl) sengaja
++ * dibiarkan karena memang sudah menonjol.
++ */
++.admin-dashboard {
++  font-size: 1.0625rem; /* ~17px, base body sedikit lebih besar dari default browser */
++}
++
++.admin-dashboard .text-\[10px\] { font-size: 13px !important; }
++.admin-dashboard .text-\[11px\] { font-size: 14px !important; }
++.admin-dashboard .text-xs { font-size: 0.9375rem !important; line-height: 1.45 !important; }   /* 12px -> 15px */
++.admin-dashboard .text-sm { font-size: 1.0625rem !important; line-height: 1.55 !important; }   /* 14px -> 17px */
++.admin-dashboard .text-base { font-size: 1.125rem !important; line-height: 1.6 !important; }   /* 16px -> 18px */
++.admin-dashboard .text-lg { font-size: 1.25rem !important; line-height: 1.55 !important; }     /* 18px -> 20px */
++.admin-dashboard .text-xl { font-size: 1.375rem !important; line-height: 1.45 !important; }    /* 20px -> 22px */
++.admin-dashboard .text-2xl { font-size: 1.625rem !important; line-height: 1.3 !important; }    /* 24px -> 26px */
++.admin-dashboard .text-3xl { font-size: 2rem !important; line-height: 1.25 !important; }       /* 30px -> 32px */
+diff --git a/src/components/admin/AdminLoginScreen.tsx b/src/components/admin/AdminLoginScreen.tsx
+index 83ff9c6..5d54417 100755
+--- a/src/components/admin/AdminLoginScreen.tsx
++++ b/src/components/admin/AdminLoginScreen.tsx
+@@ -11,7 +11,7 @@ type AdminLoginScreenProps = {
+ 
+ export default function AdminLoginScreen({ pinInput, isVerifying, onPinChange, onSubmit }: AdminLoginScreenProps) {
+   return (
+-    <main className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
++    <main className="admin-dashboard min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
+       <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full border-t-8 border-red-600">
+         <h1 className="text-2xl font-black text-gray-900 mb-2 text-center">Area Terlarang</h1>
+         <p className="text-sm text-gray-500 mb-6 text-center">Masukkan PIN Operasional untuk mengakses Dashboard KulkasKuliner.</p>
