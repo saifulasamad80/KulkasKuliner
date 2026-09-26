@@ -228,6 +228,10 @@ export async function POST(request: Request) {
       '',
       'Mohon infokan ongkos kirim Instan/Sameday beserta total transfer.',
       '',
+      '*Transfer ke:*',
+      'Bank Mandiri a.n. Sari Giyanti',
+      'No. Rek: 1040004130840',
+      '',
       'Terima kasih.',
     ].join('\n');
     const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;

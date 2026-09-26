@@ -1,0 +1,15 @@
+diff --git a/src/app/api/orders/route.ts b/src/app/api/orders/route.ts
+index 9e0eef6..2737928 100755
+--- a/src/app/api/orders/route.ts
++++ b/src/app/api/orders/route.ts
+@@ -228,6 +228,10 @@ export async function POST(request: Request) {
+       '',
+       'Mohon infokan ongkos kirim Instan/Sameday beserta total transfer.',
+       '',
++      '*Transfer ke:*',
++      'Bank Mandiri a.n. Sari Giyanti',
++      'No. Rek: 1040004130840',
++      '',
+       'Terima kasih.',
+     ].join('\n');
+     const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
