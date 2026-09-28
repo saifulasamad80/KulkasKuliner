@@ -23,6 +23,8 @@ type CheckoutBody = {
     village: string;
     street: string;
   };
+  /** Sumber pesanan untuk statistik PWA. Opsional: perangkat internal/browser lama tidak mengirimnya. */
+  tracking: { source: 'pwa' | 'browser'; visitorId: string | null } | null;
 };
 
 type CreatedOrder = {
@@ -84,10 +86,18 @@ function parseBody(value: unknown): CheckoutBody | null {
     return null;
   }
 
+  const trackingValue = body.tracking && typeof body.tracking === 'object' ? (body.tracking as Record<string, unknown>) : null;
+  const trackingSource = trackingValue?.source === 'pwa' || trackingValue?.source === 'browser' ? trackingValue.source : null;
+  const trackingVisitorId =
+    typeof trackingValue?.visitorId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(trackingValue.visitorId)
+      ? trackingValue.visitorId
+      : null;
+
   return {
     items: items as CheckoutItemInput[],
     customer: { name, phone, notes },
     address: { postalCode, city, district, village, street },
+    tracking: trackingSource ? { source: trackingSource, visitorId: trackingVisitorId } : null,
   };
 }
 
@@ -202,6 +212,21 @@ export async function POST(request: Request) {
     if (!order.order_number || !Array.isArray(order.items)) {
       console.error('Respons RPC create_order_atomic tidak sesuai kontrak.');
       return NextResponse.json({ error: 'Respons order tidak valid.' }, { status: 502 });
+    }
+
+    // Statistik PWA: tandai dari mana pesanan datang. Best effort -- kegagalan
+    // di sini (mis. migration statistik belum dijalankan) tidak boleh
+    // menggagalkan pesanan yang sudah tersimpan.
+    if (body.tracking) {
+      try {
+        const { error: trackingError } = await admin
+          .from('orders')
+          .update({ order_source: body.tracking.source, visitor_id: body.tracking.visitorId })
+          .eq('order_number', order.order_number);
+        if (trackingError) console.error('Sumber pesanan gagal disimpan:', trackingError);
+      } catch (trackingError) {
+        console.error('Sumber pesanan gagal disimpan:', trackingError);
+      }
     }
 
     const orderDetails = order.items

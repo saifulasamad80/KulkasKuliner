@@ -10,10 +10,11 @@ import DashboardModuleCard from '@/components/admin/DashboardModuleCard';
 import InventoryPanel from '@/components/admin/InventoryPanel';
 import OrdersPanel from '@/components/admin/OrdersPanel';
 import LaporanPanel from '@/components/admin/LaporanPanel';
+import StatistikPanel from '@/components/admin/StatistikPanel';
 import WhatsAppAdGenerator from '@/components/WhatsAppAdGenerator';
 import SocialContentGenerator from '@/components/SocialContentGenerator';
 
-type ModuleKey = 'pesanan' | 'menu' | 'iklan' | 'laporan';
+type ModuleKey = 'pesanan' | 'menu' | 'iklan' | 'laporan' | 'statistik';
 
 export default function AdminDashboard() {
   const { isAuthenticated, isCheckingAuth, isVerifying, pinInput, setPinInput, login, logout } = useAdminAuth();
@@ -62,11 +63,11 @@ export default function AdminDashboard() {
                 <p className="mt-1 text-sm leading-6 text-slate-500">Pilih satu modul untuk mulai bekerja.</p>
               </div>
               <span className="hidden rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-500 shadow-sm sm:inline-flex">
-                4 modul aktif
+                5 modul aktif
               </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
               <DashboardModuleCard
                 icon="🧾"
                 eyebrow={pendingOrderCount > 0 ? `${pendingOrderCount} perlu dicek` : 'Semua beres'}
@@ -98,6 +99,14 @@ export default function AdminDashboard() {
                 description="Lihat stok habis, menu paling laris, dan export ke Excel"
                 theme="amber"
                 onClick={() => setActiveModule('laporan')}
+              />
+              <DashboardModuleCard
+                icon="📱"
+                eyebrow="Pantau pengguna"
+                title="Modul Statistik"
+                description="Berapa pelanggan yang memakai PWA, seberapa sering membeli, dan berapa pendapatannya"
+                theme="blue"
+                onClick={() => setActiveModule('statistik')}
               />
             </div>
           </section>
@@ -140,6 +149,12 @@ export default function AdminDashboard() {
             {activeModule === 'laporan' && (
               <DashboardModule title="Modul Laporan" subtitle="Pantau stok, cari menu yang harus di-restock ke distributor, dan lihat menu paling laris.">
                 <LaporanPanel products={products} productSales={productSales} />
+              </DashboardModule>
+            )}
+
+            {activeModule === 'statistik' && (
+              <DashboardModule title="Modul Statistik" subtitle="Ukur seberapa banyak pelanggan memakai PWA, apakah mereka membeli, dan berapa nilai belanjanya.">
+                <StatistikPanel />
               </DashboardModule>
             )}
           </section>

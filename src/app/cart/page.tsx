@@ -4,6 +4,7 @@ import { useCartStore } from '@/store/useCartStore';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import type { CheckoutResponse } from '@/lib/types';
+import { getCheckoutTracking } from '@/lib/pwa-client';
 
 export default function CartPage() {
   const {
@@ -181,6 +182,7 @@ export default function CartPage() {
             village: kelurahan.trim(),
             street: detailJalan.trim(),
           },
+          tracking: getCheckoutTracking(),
         }),
       });
       const result = (await response.json()) as CheckoutResponse | { error?: string };

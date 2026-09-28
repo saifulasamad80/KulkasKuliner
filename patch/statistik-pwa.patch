@@ -1,0 +1,968 @@
+diff --git a/src/app/admin/page.tsx b/src/app/admin/page.tsx
+index 67d7a36..51c6360 100755
+--- a/src/app/admin/page.tsx
++++ b/src/app/admin/page.tsx
+@@ -10,10 +10,11 @@ import DashboardModuleCard from '@/components/admin/DashboardModuleCard';
+ import InventoryPanel from '@/components/admin/InventoryPanel';
+ import OrdersPanel from '@/components/admin/OrdersPanel';
+ import LaporanPanel from '@/components/admin/LaporanPanel';
++import StatistikPanel from '@/components/admin/StatistikPanel';
+ import WhatsAppAdGenerator from '@/components/WhatsAppAdGenerator';
+ import SocialContentGenerator from '@/components/SocialContentGenerator';
+ 
+-type ModuleKey = 'pesanan' | 'menu' | 'iklan' | 'laporan';
++type ModuleKey = 'pesanan' | 'menu' | 'iklan' | 'laporan' | 'statistik';
+ 
+ export default function AdminDashboard() {
+   const { isAuthenticated, isCheckingAuth, isVerifying, pinInput, setPinInput, login, logout } = useAdminAuth();
+@@ -62,11 +63,11 @@ export default function AdminDashboard() {
+                 <p className="mt-1 text-sm leading-6 text-slate-500">Pilih satu modul untuk mulai bekerja.</p>
+               </div>
+               <span className="hidden rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-500 shadow-sm sm:inline-flex">
+-                4 modul aktif
++                5 modul aktif
+               </span>
+             </div>
+ 
+-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
++            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+               <DashboardModuleCard
+                 icon="🧾"
+                 eyebrow={pendingOrderCount > 0 ? `${pendingOrderCount} perlu dicek` : 'Semua beres'}
+@@ -99,6 +100,14 @@ export default function AdminDashboard() {
+                 theme="amber"
+                 onClick={() => setActiveModule('laporan')}
+               />
++              <DashboardModuleCard
++                icon="📱"
++                eyebrow="Pantau pengguna"
++                title="Modul Statistik"
++                description="Berapa pelanggan yang memakai PWA, seberapa sering membeli, dan berapa pendapatannya"
++                theme="blue"
++                onClick={() => setActiveModule('statistik')}
++              />
+             </div>
+           </section>
+         ) : (
+@@ -142,6 +151,12 @@ export default function AdminDashboard() {
+                 <LaporanPanel products={products} productSales={productSales} />
+               </DashboardModule>
+             )}
++
++            {activeModule === 'statistik' && (
++              <DashboardModule title="Modul Statistik" subtitle="Ukur seberapa banyak pelanggan memakai PWA, apakah mereka membeli, dan berapa nilai belanjanya.">
++                <StatistikPanel />
++              </DashboardModule>
++            )}
+           </section>
+         )}
+       </div>
+diff --git a/src/app/api/admin/analytics/route.ts b/src/app/api/admin/analytics/route.ts
+new file mode 100644
+index 0000000..e30903a
+--- /dev/null
++++ b/src/app/api/admin/analytics/route.ts
+@@ -0,0 +1,81 @@
++import { NextResponse } from 'next/server';
++import { hasAdminSession } from '@/lib/admin-session';
++import { computePwaAnalytics, jakartaDate, shiftDate, type OrderRow, type VisitRow } from '@/lib/pwa-analytics';
++import { getSupabaseAdmin } from '@/lib/supabase-admin';
++
++export const runtime = 'nodejs';
++
++const PAGE_SIZE = 1000; // batas baris per request Supabase
++const MAX_PAGES = 50;
++
++// 42P01/PGRST205 = tabel belum ada, 42703/PGRST204 = kolom belum ada.
++const MISSING_SCHEMA_CODES = new Set(['42P01', '42703', 'PGRST204', 'PGRST205']);
++
++type PageResult = { data: unknown[] | null; error: { code?: string; message?: string } | null };
++
++/** Supabase membatasi 1000 baris per request, jadi ambil bertahap sampai habis. */
++async function fetchAll(load: (from: number, to: number) => PromiseLike<PageResult>) {
++  const rows: unknown[] = [];
++  for (let page = 0; page < MAX_PAGES; page += 1) {
++    const from = page * PAGE_SIZE;
++    const { data, error } = await load(from, from + PAGE_SIZE - 1);
++    if (error) throw error;
++    rows.push(...(data ?? []));
++    if (!data || data.length < PAGE_SIZE) break;
++  }
++  return rows;
++}
++
++export async function GET(request: Request) {
++  if (!(await hasAdminSession())) {
++    return NextResponse.json({ error: 'Tidak diizinkan.' }, { status: 403 });
++  }
++
++  const requestedDays = Number(new URL(request.url).searchParams.get('days'));
++  const days = requestedDays === 30 ? 30 : 7;
++  const today = jakartaDate(new Date());
++  const startDate = shiftDate(today, -(days - 1));
++
++  try {
++    const admin = getSupabaseAdmin();
++
++    const [visits, orders] = await Promise.all([
++      fetchAll((from, to) =>
++        admin
++          .from('pwa_visits')
++          .select('visitor_id, display_mode, visit_date')
++          .gte('visit_date', startDate)
++          .order('id')
++          .range(from, to)
++      ),
++      fetchAll((from, to) =>
++        admin
++          .from('orders')
++          .select('total_amount, status, order_source, visitor_id, created_at')
++          .gte('created_at', `${startDate}T00:00:00+07:00`)
++          .order('created_at')
++          .order('id')
++          .range(from, to)
++      ),
++    ]);
++
++    const analytics = computePwaAnalytics({
++      visits: visits as VisitRow[],
++      orders: orders as OrderRow[],
++      days,
++      today,
++    });
++
++    return NextResponse.json(analytics, { headers: { 'Cache-Control': 'no-store' } });
++  } catch (error) {
++    console.error('Statistik PWA gagal dimuat:', error);
++    const code = (error as { code?: string })?.code;
++    if (code && MISSING_SCHEMA_CODES.has(code)) {
++      return NextResponse.json(
++        { error: 'Tabel statistik belum dibuat. Jalankan migration SQL 20260928_pwa_analytics.sql di Supabase dulu.' },
++        { status: 503 }
++      );
++    }
++    return NextResponse.json({ error: 'Statistik gagal dimuat. Coba muat ulang.' }, { status: 502 });
++  }
++}
+diff --git a/src/app/api/orders/route.ts b/src/app/api/orders/route.ts
+index 20b5e29..16edfde 100755
+--- a/src/app/api/orders/route.ts
++++ b/src/app/api/orders/route.ts
+@@ -23,6 +23,8 @@ type CheckoutBody = {
+     village: string;
+     street: string;
+   };
++  /** Sumber pesanan untuk statistik PWA. Opsional: perangkat internal/browser lama tidak mengirimnya. */
++  tracking: { source: 'pwa' | 'browser'; visitorId: string | null } | null;
+ };
+ 
+ type CreatedOrder = {
+@@ -84,10 +86,18 @@ function parseBody(value: unknown): CheckoutBody | null {
+     return null;
+   }
+ 
++  const trackingValue = body.tracking && typeof body.tracking === 'object' ? (body.tracking as Record<string, unknown>) : null;
++  const trackingSource = trackingValue?.source === 'pwa' || trackingValue?.source === 'browser' ? trackingValue.source : null;
++  const trackingVisitorId =
++    typeof trackingValue?.visitorId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(trackingValue.visitorId)
++      ? trackingValue.visitorId
++      : null;
++
+   return {
+     items: items as CheckoutItemInput[],
+     customer: { name, phone, notes },
+     address: { postalCode, city, district, village, street },
++    tracking: trackingSource ? { source: trackingSource, visitorId: trackingVisitorId } : null,
+   };
+ }
+ 
+@@ -204,6 +214,21 @@ export async function POST(request: Request) {
+       return NextResponse.json({ error: 'Respons order tidak valid.' }, { status: 502 });
+     }
+ 
++    // Statistik PWA: tandai dari mana pesanan datang. Best effort -- kegagalan
++    // di sini (mis. migration statistik belum dijalankan) tidak boleh
++    // menggagalkan pesanan yang sudah tersimpan.
++    if (body.tracking) {
++      try {
++        const { error: trackingError } = await admin
++          .from('orders')
++          .update({ order_source: body.tracking.source, visitor_id: body.tracking.visitorId })
++          .eq('order_number', order.order_number);
++        if (trackingError) console.error('Sumber pesanan gagal disimpan:', trackingError);
++      } catch (trackingError) {
++        console.error('Sumber pesanan gagal disimpan:', trackingError);
++      }
++    }
++
+     const orderDetails = order.items
+       .map((item) => `- ${item.quantity}x ${item.menu_name || item.name}${item.variant_name ? ` (${item.variant_name})` : ''} (Rp ${(item.price * item.quantity).toLocaleString('id-ID')})`)
+       .join('\n');
+diff --git a/src/app/api/track/route.ts b/src/app/api/track/route.ts
+new file mode 100644
+index 0000000..eb49e1e
+--- /dev/null
++++ b/src/app/api/track/route.ts
+@@ -0,0 +1,53 @@
++import { NextResponse } from 'next/server';
++import { isSameOrigin } from '@/lib/admin-session';
++import { jakartaDate } from '@/lib/pwa-analytics';
++import { getSupabaseAdmin } from '@/lib/supabase-admin';
++
++export const runtime = 'nodejs';
++
++const VISITOR_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
++const BOT_PATTERN = /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit/i;
++
++/**
++ * Mencatat "perangkat ini membuka katalog hari ini". Idempotent: pemanggilan
++ * ulang di hari yang sama tidak menambah baris (unique visitor+tanggal+mode).
++ * Sengaja tidak membalas detail error ke klien; pelacakan tidak boleh
++ * mengganggu pembeli.
++ */
++export async function POST(request: Request) {
++  if (!isSameOrigin(request)) {
++    return NextResponse.json({ ok: false }, { status: 403 });
++  }
++
++  if (BOT_PATTERN.test(request.headers.get('user-agent') ?? '')) {
++    return NextResponse.json({ ok: true, skipped: true });
++  }
++
++  let body: unknown;
++  try {
++    body = await request.json();
++  } catch {
++    return NextResponse.json({ ok: false }, { status: 400 });
++  }
++
++  const value = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
++  const visitorId = typeof value.visitorId === 'string' ? value.visitorId : '';
++  const displayMode = value.displayMode;
++  if (!VISITOR_ID_PATTERN.test(visitorId) || (displayMode !== 'pwa' && displayMode !== 'browser')) {
++    return NextResponse.json({ ok: false }, { status: 400 });
++  }
++
++  try {
++    const { error } = await getSupabaseAdmin()
++      .from('pwa_visits')
++      .upsert(
++        { visitor_id: visitorId, display_mode: displayMode, visit_date: jakartaDate(new Date()) },
++        { onConflict: 'visitor_id,visit_date,display_mode', ignoreDuplicates: true }
++      );
++    if (error) throw error;
++    return NextResponse.json({ ok: true });
++  } catch (error) {
++    console.error('Pelacakan kunjungan gagal:', error);
++    return NextResponse.json({ ok: false }, { status: 500 });
++  }
++}
+diff --git a/src/app/cart/page.tsx b/src/app/cart/page.tsx
+index be85d98..409ed7b 100755
+--- a/src/app/cart/page.tsx
++++ b/src/app/cart/page.tsx
+@@ -4,6 +4,7 @@ import { useCartStore } from '@/store/useCartStore';
+ import { useState, useEffect, useRef } from 'react';
+ import Link from 'next/link';
+ import type { CheckoutResponse } from '@/lib/types';
++import { getCheckoutTracking } from '@/lib/pwa-client';
+ 
+ export default function CartPage() {
+   const {
+@@ -181,6 +182,7 @@ export default function CartPage() {
+             village: kelurahan.trim(),
+             street: detailJalan.trim(),
+           },
++          tracking: getCheckoutTracking(),
+         }),
+       });
+       const result = (await response.json()) as CheckoutResponse | { error?: string };
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+index 9962a04..ddadffe 100755
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
+ import { Geist, Geist_Mono } from "next/font/google";
+ import "./globals.css";
+ import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
++import PwaTracker from "@/components/PwaTracker";
+ 
+ const geistSans = Geist({
+   variable: "--font-geist-sans",
+@@ -63,6 +64,7 @@ export default function RootLayout({
+       <body className="min-h-full flex flex-col bg-white">
+         {children}
+         <ServiceWorkerRegister />
++        <PwaTracker />
+       </body>
+     </html>
+   );
+diff --git a/src/components/PwaTracker.tsx b/src/components/PwaTracker.tsx
+new file mode 100644
+index 0000000..1424edd
+--- /dev/null
++++ b/src/components/PwaTracker.tsx
+@@ -0,0 +1,59 @@
++"use client";
++
++import { useEffect } from "react";
++import { usePathname } from "next/navigation";
++import {
++  alreadyTrackedToday,
++  getDisplayMode,
++  getVisitorId,
++  isInternalDevice,
++  markInternalDevice,
++  rememberTrackedToday,
++} from "@/lib/pwa-client";
++
++/**
++ * Melaporkan "perangkat ini membuka katalog hari ini" (PWA atau browser),
++ * maksimal sekali per hari per mode. Tidak mengirim data pribadi apa pun.
++ * Halaman /admin tidak dihitung; perangkat yang pernah buka /admin juga
++ * dikecualikan supaya pemakaian admin tidak tercampur dengan pelanggan.
++ */
++export default function PwaTracker() {
++  const pathname = usePathname();
++
++  useEffect(() => {
++    if (pathname.startsWith("/admin")) {
++      markInternalDevice();
++      return;
++    }
++    if (isInternalDevice()) return;
++
++    const report = () => {
++      const mode = getDisplayMode();
++      if (alreadyTrackedToday(mode)) return;
++
++      void fetch("/api/track", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ visitorId: getVisitorId(), displayMode: mode }),
++        keepalive: true,
++      })
++        .then((response) => {
++          if (response.ok) rememberTrackedToday(mode);
++        })
++        .catch(() => {
++          // Pelacakan tidak boleh mengganggu pembeli: gagal ya sudah, coba lagi lain kali.
++        });
++    };
++
++    report();
++
++    // PWA sering dibiarkan terbuka berhari-hari; hitung lagi saat dibuka kembali di hari baru.
++    const onVisible = () => {
++      if (document.visibilityState === "visible") report();
++    };
++    document.addEventListener("visibilitychange", onVisible);
++    return () => document.removeEventListener("visibilitychange", onVisible);
++  }, [pathname]);
++
++  return null;
++}
+diff --git a/src/components/admin/StatistikPanel.tsx b/src/components/admin/StatistikPanel.tsx
+new file mode 100644
+index 0000000..679830a
+--- /dev/null
++++ b/src/components/admin/StatistikPanel.tsx
+@@ -0,0 +1,254 @@
++"use client";
++
++import { useEffect, useState } from 'react';
++import type { DailyPoint, ModeStats, PwaAnalytics } from '@/lib/pwa-analytics';
++
++type Period = 7 | 30;
++type Result = { days: Period; data: PwaAnalytics | null; error: string | null };
++
++const rupiah = (value: number) => `Rp ${Math.round(value).toLocaleString('id-ID')}`;
++const percent = (value: number | null) =>
++  value === null ? '–' : `${(value * 100).toLocaleString('id-ID', { maximumFractionDigits: 1 })}%`;
++const decimal = (value: number) => value.toLocaleString('id-ID', { maximumFractionDigits: 1 });
++
++function shortDate(date: string) {
++  const [, month, day] = date.split('-');
++  return `${day}/${month}`;
++}
++
++function weekday(date: string) {
++  return new Date(`${date}T12:00:00Z`).toLocaleDateString('id-ID', { weekday: 'short', timeZone: 'UTC' });
++}
++
++const TONES = {
++  emerald: 'border-emerald-200 bg-linear-to-br from-emerald-50 to-white text-emerald-800',
++  sky: 'border-sky-200 bg-linear-to-br from-sky-50 to-white text-sky-800',
++  amber: 'border-amber-200 bg-linear-to-br from-amber-50 to-white text-amber-800',
++  violet: 'border-violet-200 bg-linear-to-br from-violet-50 to-white text-violet-800',
++} as const;
++
++function KpiCard({ icon, label, value, note, tone }: { icon: string; label: string; value: string; note: string; tone: keyof typeof TONES }) {
++  return (
++    <div className={`rounded-2xl border p-4 sm:p-5 ${TONES[tone]}`}>
++      <p className="flex items-center gap-2 text-sm font-black uppercase tracking-wide">
++        <span aria-hidden="true">{icon}</span>
++        {label}
++      </p>
++      <p className="mt-2 text-3xl font-black leading-tight text-slate-950">{value}</p>
++      <p className="mt-1.5 text-sm leading-5 text-slate-600">{note}</p>
++    </div>
++  );
++}
++
++function DailyChart({ daily }: { daily: DailyPoint[] }) {
++  const max = Math.max(1, ...daily.map((point) => point.pwa + point.browser));
++  const showEveryLabel = daily.length <= 7;
++  const summary = daily.map((point) => `${shortDate(point.date)}: ${point.pwa} PWA, ${point.browser} browser`).join('; ');
++
++  return (
++    <div>
++      <div className="flex h-44 items-end gap-1 sm:gap-1.5" role="img" aria-label={`Grafik pengguna harian. ${summary}`}>
++        {daily.map((point) => (
++          <div key={point.date} className="flex h-full min-w-0 flex-1 flex-col justify-end" title={`${shortDate(point.date)} — ${point.pwa} lewat PWA, ${point.browser} lewat browser`}>
++            <div className="w-full rounded-t bg-slate-300" style={{ height: `${(point.browser / max) * 100}%` }} />
++            <div className={`w-full bg-emerald-500 ${point.browser === 0 ? 'rounded-t' : ''}`} style={{ height: `${(point.pwa / max) * 100}%` }} />
++          </div>
++        ))}
++      </div>
++      <div className="mt-2 flex gap-1 sm:gap-1.5">
++        {daily.map((point, index) => {
++          const visible = showEveryLabel || index === 0 || index === daily.length - 1 || index === Math.floor(daily.length / 2);
++          return (
++            <div key={point.date} className="min-w-0 flex-1 text-center text-xs font-bold leading-4 text-slate-500">
++              {visible ? (
++                <>
++                  {showEveryLabel && <span className="block">{weekday(point.date)}</span>}
++                  <span className="block">{shortDate(point.date)}</span>
++                </>
++              ) : null}
++            </div>
++          );
++        })}
++      </div>
++      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm font-semibold text-slate-600">
++        <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-emerald-500" />Lewat PWA (aplikasi terpasang)</span>
++        <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-slate-300" />Lewat browser biasa</span>
++      </div>
++    </div>
++  );
++}
++
++function ComparisonTable({ pwa, browser }: { pwa: ModeStats; browser: ModeStats }) {
++  const rows: Array<{ label: string; pwa: string; browser: string }> = [
++    { label: 'Pengguna unik', pwa: String(pwa.visitors), browser: String(browser.visitors) },
++    { label: 'Pengguna yang kembali lagi', pwa: `${pwa.returningVisitors} (${percent(pwa.returningRate)})`, browser: `${browser.returningVisitors} (${percent(browser.returningRate)})` },
++    { label: 'Pembeli', pwa: String(pwa.buyers), browser: String(browser.buyers) },
++    { label: 'Konversi (pembeli ÷ pengguna)', pwa: percent(pwa.conversionRate), browser: percent(browser.conversionRate) },
++    { label: 'Pesanan lunas', pwa: String(pwa.paidOrders), browser: String(browser.paidOrders) },
++    { label: 'Pendapatan', pwa: rupiah(pwa.revenue), browser: rupiah(browser.revenue) },
++    { label: 'Rata-rata belanja', pwa: pwa.paidOrders ? rupiah(pwa.aov) : '–', browser: browser.paidOrders ? rupiah(browser.aov) : '–' },
++  ];
++
++  return (
++    <div className="overflow-x-auto rounded-xl border border-slate-200">
++      <table className="w-full min-w-[520px] text-left">
++        <thead className="bg-slate-50 text-sm font-black uppercase tracking-wide text-slate-500">
++          <tr>
++            <th className="px-4 py-3">Ukuran</th>
++            <th className="bg-emerald-50 px-4 py-3 text-right text-emerald-700">PWA</th>
++            <th className="px-4 py-3 text-right">Browser</th>
++          </tr>
++        </thead>
++        <tbody className="divide-y divide-slate-100">
++          {rows.map((row) => (
++            <tr key={row.label}>
++              <td className="px-4 py-3 font-semibold text-slate-700">{row.label}</td>
++              <td className="bg-emerald-50/50 px-4 py-3 text-right font-black text-slate-950">{row.pwa}</td>
++              <td className="px-4 py-3 text-right font-bold text-slate-600">{row.browser}</td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++    </div>
++  );
++}
++
++function getInsight(data: PwaAnalytics) {
++  const { pwa, browser } = data.stats;
++  if (data.totalVisitors === 0) {
++    return { tone: 'slate', text: 'Belum ada data pengunjung. Pelacakan baru mulai menghitung setelah fitur ini aktif, jadi angkanya akan terisi dalam sehari-dua hari.' } as const;
++  }
++  if (pwa.visitors === 0) {
++    return { tone: 'amber', text: 'Belum ada pelanggan yang memakai PWA di periode ini. Coba ajak pelanggan langganan memasang aplikasinya (buka katalog di browser HP → menu → "Tambahkan ke layar utama").' } as const;
++  }
++  if (pwa.visitors >= 10 && browser.visitors >= 10 && pwa.conversionRate !== null && browser.conversionRate !== null) {
++    if (pwa.conversionRate < browser.conversionRate) {
++      return { tone: 'amber', text: `Konversi PWA (${percent(pwa.conversionRate)}) lebih rendah dari browser (${percent(browser.conversionRate)}). Pengguna PWA rajin membuka tapi lebih jarang menyelesaikan pembelian — kemungkinan ada yang mengganjal di harga, menu, atau alur checkout.` } as const;
++    }
++    return { tone: 'emerald', text: `Konversi PWA (${percent(pwa.conversionRate)}) sama atau lebih tinggi dari browser (${percent(browser.conversionRate)}). Pengguna PWA cukup efektif berubah jadi pembeli.` } as const;
++  }
++  return { tone: 'slate', text: 'Data belum cukup untuk membandingkan PWA dengan browser (butuh minimal 10 pengguna di masing-masing).' } as const;
++}
++
++const INSIGHT_TONES = {
++  slate: 'border-slate-200 bg-slate-50 text-slate-700',
++  amber: 'border-amber-300 bg-amber-50 text-amber-900',
++  emerald: 'border-emerald-300 bg-emerald-50 text-emerald-900',
++} as const;
++
++export default function StatistikPanel() {
++  const [days, setDays] = useState<Period>(7);
++  const [result, setResult] = useState<Result | null>(null);
++  const [reloadKey, setReloadKey] = useState(0);
++
++  useEffect(() => {
++    let active = true;
++    void (async () => {
++      try {
++        const response = await fetch(`/api/admin/analytics?days=${days}`, { cache: 'no-store' });
++        const body = (await response.json().catch(() => null)) as (PwaAnalytics & { error?: string }) | null;
++        if (!active) return;
++        if (!response.ok || !body || body.error) {
++          setResult({ days, data: null, error: body?.error || 'Statistik gagal dimuat.' });
++        } else {
++          setResult({ days, data: body, error: null });
++        }
++      } catch {
++        if (active) setResult({ days, data: null, error: 'Koneksi bermasalah. Coba muat ulang.' });
++      }
++    })();
++    return () => {
++      active = false;
++    };
++  }, [days, reloadKey]);
++
++  const isLoading = result === null || result.days !== days;
++  const data = !isLoading ? result?.data ?? null : null;
++  const error = !isLoading ? result?.error ?? null : null;
++
++  return (
++    <div className="space-y-6">
++      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
++        <div className="inline-flex rounded-xl border border-slate-300 bg-white p-1" role="group" aria-label="Pilih periode">
++          {([7, 30] as Period[]).map((option) => (
++            <button
++              key={option}
++              type="button"
++              onClick={() => setDays(option)}
++              aria-pressed={days === option}
++              className={`min-h-11 rounded-lg px-5 text-sm font-black transition-colors ${days === option ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
++            >
++              {option} hari terakhir
++            </button>
++          ))}
++        </div>
++        <button
++          type="button"
++          onClick={() => { setResult(null); setReloadKey((key) => key + 1); }}
++          className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 hover:bg-slate-50"
++        >
++          ↻ Muat ulang
++        </button>
++      </div>
++
++      {isLoading && <p className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-base font-bold text-slate-500">Memuat statistik…</p>}
++
++      {error && (
++        <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-base font-bold leading-6 text-red-700">{error}</p>
++      )}
++
++      {data && (() => {
++        const insight = getInsight(data);
++        const { pwa, browser } = data.stats;
++        return (
++          <>
++            <section aria-labelledby="ringkasan-pwa" className="space-y-3">
++              <h4 id="ringkasan-pwa" className="text-xl font-black text-slate-900">Ringkasan PWA · {data.days} hari terakhir</h4>
++              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
++                <KpiCard icon="👥" tone="emerald" label="Pengguna PWA hari ini" value={String(data.dauToday.pwa)} note={`Rata-rata ${decimal(data.averageDau.pwa)} pengguna per hari`} />
++                <KpiCard icon="🎯" tone="sky" label="Konversi PWA" value={percent(pwa.conversionRate)} note={`${pwa.buyers} pembeli dari ${pwa.visitors} pengguna`} />
++                <KpiCard icon="💰" tone="amber" label="Pendapatan PWA" value={rupiah(pwa.revenue)} note={`Dari ${pwa.paidOrders} pesanan yang sudah lunas`} />
++                <KpiCard icon="🛒" tone="violet" label="Rata-rata belanja" value={pwa.paidOrders ? rupiah(pwa.aov) : '–'} note="Per pesanan lunas lewat PWA" />
++              </div>
++            </section>
++
++            <p className={`rounded-xl border p-4 text-base font-semibold leading-6 ${INSIGHT_TONES[insight.tone]}`}>💡 {insight.text}</p>
++
++            <section aria-labelledby="antusias" className="space-y-3">
++              <h4 id="antusias" className="text-xl font-black text-slate-900">Seberapa antusias pengguna?</h4>
++              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
++                <KpiCard icon="📱" tone="emerald" label="Pengguna PWA unik" value={String(pwa.visitors)} note={`${percent(data.pwaShare)} dari semua pengunjung (${data.totalVisitors})`} />
++                <KpiCard icon="🔁" tone="sky" label="Yang kembali lagi" value={percent(pwa.returningRate)} note={`${pwa.returningVisitors} pengguna aktif di 2 hari atau lebih`} />
++                <KpiCard icon="🧾" tone="amber" label="Pesanan dibuat lewat PWA" value={String(pwa.orders)} note="Termasuk yang belum lunas" />
++              </div>
++            </section>
++
++            <section aria-labelledby="grafik" className="space-y-3">
++              <h4 id="grafik" className="text-xl font-black text-slate-900">Pengguna per hari</h4>
++              <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
++                <DailyChart daily={data.daily} />
++              </div>
++            </section>
++
++            <section aria-labelledby="banding" className="space-y-3">
++              <h4 id="banding" className="text-xl font-black text-slate-900">PWA dibanding browser biasa</h4>
++              <ComparisonTable pwa={pwa} browser={browser} />
++            </section>
++
++            <details className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-base leading-7 text-slate-700">
++              <summary className="cursor-pointer text-base font-black text-slate-900">Cara membaca &amp; menghitung angka ini</summary>
++              <ul className="mt-3 list-disc space-y-2 pl-5">
++                <li><span className="font-black">Pengguna</span> dihitung per perangkat (anonim), bukan per orang. Satu orang yang memakai 2 HP dihitung 2. Di iPhone, aplikasi PWA dan Safari terhitung terpisah.</li>
++                <li><span className="font-black">Konversi</span> = pembeli ÷ pengguna. Pembeli = perangkat yang membuat pesanan (yang ditolak/dibatalkan tidak dihitung).</li>
++                <li><span className="font-black">Pendapatan &amp; rata-rata belanja</span> hanya dari pesanan yang sudah lunas, sama seperti Total Pendapatan di bagian atas dashboard.</li>
++                <li>Kalau pengguna banyak tapi konversi rendah, masalahnya biasanya di harga, menu, atau alur checkout — bukan di jumlah pengunjung.</li>
++                <li>Perangkat yang pernah membuka halaman admin tidak dihitung, supaya pemakaian admin tidak tercampur dengan pelanggan.</li>
++                <li>Data baru terkumpul sejak fitur ini dipasang. {data.unattributedOrders > 0 ? `${data.unattributedOrders} pesanan di periode ini belum ada data sumbernya (pesanan lama atau dari perangkat admin), jadi tidak masuk hitungan PWA maupun browser.` : 'Semua pesanan di periode ini sudah punya data sumber.'}</li>
++              </ul>
++            </details>
++          </>
++        );
++      })()}
++    </div>
++  );
++}
+diff --git a/src/lib/pwa-analytics.ts b/src/lib/pwa-analytics.ts
+new file mode 100644
+index 0000000..df0a7d5
+--- /dev/null
++++ b/src/lib/pwa-analytics.ts
+@@ -0,0 +1,191 @@
++export type DisplayMode = 'pwa' | 'browser';
++
++export const DISPLAY_MODES: DisplayMode[] = ['pwa', 'browser'];
++
++export type VisitRow = {
++  visitor_id: string;
++  display_mode: string;
++  visit_date: string; // YYYY-MM-DD, zona waktu Asia/Jakarta
++};
++
++export type OrderRow = {
++  total_amount: number | string;
++  status: string;
++  order_source: string | null;
++  visitor_id: string | null;
++  created_at: string;
++};
++
++export type ModeStats = {
++  /** Perangkat unik yang membuka katalog di periode ini. */
++  visitors: number;
++  /** Perangkat yang aktif di 2 hari berbeda atau lebih (ukuran antusias). */
++  returningVisitors: number;
++  returningRate: number;
++  /** Perangkat unik yang membuat pesanan (bukan yang ditolak/dibatalkan). */
++  buyers: number;
++  /** Pesanan yang dibuat (bukan yang ditolak/dibatalkan). */
++  orders: number;
++  /** buyers / visitors, null kalau belum ada pengunjung. */
++  conversionRate: number | null;
++  /** Pesanan yang sudah lunas (paid/completed). */
++  paidOrders: number;
++  revenue: number;
++  /** revenue / paidOrders, 0 kalau belum ada pesanan lunas. */
++  aov: number;
++};
++
++export type DailyPoint = { date: string; pwa: number; browser: number };
++
++export type PwaAnalytics = {
++  days: number;
++  today: string;
++  stats: Record<DisplayMode, ModeStats>;
++  daily: DailyPoint[];
++  dauToday: Record<DisplayMode, number>;
++  averageDau: Record<DisplayMode, number>;
++  /** Perangkat unik gabungan PWA + browser di periode ini. */
++  totalVisitors: number;
++  /** Porsi perangkat yang pernah memakai PWA dari seluruh pengunjung (0..1). */
++  pwaShare: number;
++  /** Pesanan periode ini tanpa data sumber (pesanan lama / perangkat admin). */
++  unattributedOrders: number;
++};
++
++const JAKARTA_DATE = new Intl.DateTimeFormat('en-CA', {
++  timeZone: 'Asia/Jakarta',
++  year: 'numeric',
++  month: '2-digit',
++  day: '2-digit',
++});
++
++/** Tanggal (YYYY-MM-DD) di zona waktu Jakarta. */
++export function jakartaDate(input: Date | string): string {
++  return JAKARTA_DATE.format(typeof input === 'string' ? new Date(input) : input);
++}
++
++export function shiftDate(date: string, deltaDays: number): string {
++  const [year, month, day] = date.split('-').map(Number);
++  return new Date(Date.UTC(year, month - 1, day + deltaDays)).toISOString().slice(0, 10);
++}
++
++function isDisplayMode(value: unknown): value is DisplayMode {
++  return value === 'pwa' || value === 'browser';
++}
++
++type Accumulator = {
++  daysByVisitor: Map<string, Set<string>>;
++  visitorsByDate: Map<string, Set<string>>;
++  buyers: Set<string>;
++  orders: number;
++  paidOrders: number;
++  revenue: number;
++};
++
++function createAccumulator(): Accumulator {
++  return {
++    daysByVisitor: new Map(),
++    visitorsByDate: new Map(),
++    buyers: new Set(),
++    orders: 0,
++    paidOrders: 0,
++    revenue: 0,
++  };
++}
++
++function round1(value: number) {
++  return Math.round(value * 10) / 10;
++}
++
++export function computePwaAnalytics(input: {
++  visits: VisitRow[];
++  orders: OrderRow[];
++  days: number;
++  today: string;
++}): PwaAnalytics {
++  const { visits, orders, days, today } = input;
++  const range = Array.from({ length: days }, (_, index) => shiftDate(today, index - (days - 1)));
++  const inRange = new Set(range);
++  const acc: Record<DisplayMode, Accumulator> = { pwa: createAccumulator(), browser: createAccumulator() };
++  const allVisitors = new Set<string>();
++
++  for (const visit of visits) {
++    if (!isDisplayMode(visit.display_mode) || !inRange.has(visit.visit_date)) continue;
++    const bucket = acc[visit.display_mode];
++
++    const visitorDays = bucket.daysByVisitor.get(visit.visitor_id) ?? new Set<string>();
++    visitorDays.add(visit.visit_date);
++    bucket.daysByVisitor.set(visit.visitor_id, visitorDays);
++
++    const dateVisitors = bucket.visitorsByDate.get(visit.visit_date) ?? new Set<string>();
++    dateVisitors.add(visit.visitor_id);
++    bucket.visitorsByDate.set(visit.visit_date, dateVisitors);
++
++    allVisitors.add(visit.visitor_id);
++  }
++
++  let unattributedOrders = 0;
++  orders.forEach((order, index) => {
++    if (order.status === 'canceled') return;
++    if (!inRange.has(jakartaDate(order.created_at))) return;
++    if (!isDisplayMode(order.order_source)) {
++      unattributedOrders += 1;
++      return;
++    }
++
++    const bucket = acc[order.order_source];
++    bucket.orders += 1;
++    // Pesanan tanpa visitor_id tetap dihitung sebagai 1 pembeli sendiri.
++    bucket.buyers.add(order.visitor_id ?? `order-${index}`);
++
++    if (order.status === 'paid' || order.status === 'completed') {
++      bucket.paidOrders += 1;
++      bucket.revenue += Number(order.total_amount) || 0;
++    }
++  });
++
++  const stats = {} as Record<DisplayMode, ModeStats>;
++  const dauToday = {} as Record<DisplayMode, number>;
++  const averageDau = {} as Record<DisplayMode, number>;
++
++  for (const mode of ['pwa', 'browser'] as DisplayMode[]) {
++    const bucket = acc[mode];
++    const visitors = bucket.daysByVisitor.size;
++    const returningVisitors = Array.from(bucket.daysByVisitor.values()).filter((dates) => dates.size >= 2).length;
++    const buyers = bucket.buyers.size;
++
++    stats[mode] = {
++      visitors,
++      returningVisitors,
++      returningRate: visitors > 0 ? returningVisitors / visitors : 0,
++      buyers,
++      orders: bucket.orders,
++      conversionRate: visitors > 0 ? Math.min(1, buyers / visitors) : null,
++      paidOrders: bucket.paidOrders,
++      revenue: bucket.revenue,
++      aov: bucket.paidOrders > 0 ? Math.round(bucket.revenue / bucket.paidOrders) : 0,
++    };
++
++    dauToday[mode] = bucket.visitorsByDate.get(today)?.size ?? 0;
++    const totalDaily = range.reduce((sum, date) => sum + (bucket.visitorsByDate.get(date)?.size ?? 0), 0);
++    averageDau[mode] = round1(totalDaily / days);
++  }
++
++  const daily = range.map((date) => ({
++    date,
++    pwa: acc.pwa.visitorsByDate.get(date)?.size ?? 0,
++    browser: acc.browser.visitorsByDate.get(date)?.size ?? 0,
++  }));
++
++  return {
++    days,
++    today,
++    stats,
++    daily,
++    dauToday,
++    averageDau,
++    totalVisitors: allVisitors.size,
++    pwaShare: allVisitors.size > 0 ? stats.pwa.visitors / allVisitors.size : 0,
++    unattributedOrders,
++  };
++}
+diff --git a/src/lib/pwa-client.ts b/src/lib/pwa-client.ts
+new file mode 100644
+index 0000000..2f7d9e3
+--- /dev/null
++++ b/src/lib/pwa-client.ts
+@@ -0,0 +1,99 @@
++import type { DisplayMode } from '@/lib/pwa-analytics';
++
++const VISITOR_ID_KEY = 'kk_vid';
++const INTERNAL_KEY = 'kk_internal';
++const LAST_TRACK_KEY = 'kk_track_last';
++
++// Cadangan kalau localStorage diblokir (mis. mode privat): ID tetap konsisten
++// selama halaman terbuka, tapi tidak bertahan setelah ditutup.
++let memoryVisitorId: string | null = null;
++
++function safeStorage(): Storage | null {
++  try {
++    return typeof window === 'undefined' ? null : window.localStorage;
++  } catch {
++    return null;
++  }
++}
++
++function randomId() {
++  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
++    return crypto.randomUUID();
++  }
++  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
++}
++
++/** PWA = halaman berjalan sebagai aplikasi terpasang (standalone), bukan tab browser biasa. */
++export function getDisplayMode(): DisplayMode {
++  if (typeof window === 'undefined') return 'browser';
++  const standalone =
++    window.matchMedia?.('(display-mode: standalone)').matches ||
++    window.matchMedia?.('(display-mode: minimal-ui)').matches ||
++    // iOS Safari (aplikasi dari "Tambah ke Layar Utama") tidak mendukung display-mode
++    (navigator as Navigator & { standalone?: boolean }).standalone === true;
++  return standalone ? 'pwa' : 'browser';
++}
++
++/** ID acak per perangkat. Bukan data pribadi, tidak bisa dilacak balik ke orang. */
++export function getVisitorId(): string {
++  const storage = safeStorage();
++  try {
++    const existing = storage?.getItem(VISITOR_ID_KEY);
++    if (existing && /^[A-Za-z0-9_-]{8,64}$/.test(existing)) return existing;
++  } catch {
++    // lanjut buat ID baru
++  }
++
++  const created = memoryVisitorId ?? randomId();
++  memoryVisitorId = created;
++  try {
++    storage?.setItem(VISITOR_ID_KEY, created);
++  } catch {
++    // storage penuh/diblokir: pakai ID di memori saja
++  }
++  return created;
++}
++
++/**
++ * Perangkat yang pernah membuka /admin ditandai sebagai internal supaya
++ * pemakaian admin sendiri (termasuk lewat shortcut PWA admin) tidak
++ * dianggap pelanggan dan menggelembungkan angka pengguna.
++ */
++export function markInternalDevice() {
++  try {
++    safeStorage()?.setItem(INTERNAL_KEY, '1');
++  } catch {
++    // abaikan
++  }
++}
++
++export function isInternalDevice(): boolean {
++  try {
++    return safeStorage()?.getItem(INTERNAL_KEY) === '1';
++  } catch {
++    return false;
++  }
++}
++
++/** Sudah dilaporkan hari ini untuk mode ini? Menghindari request berulang di tiap halaman. */
++export function alreadyTrackedToday(mode: DisplayMode): boolean {
++  try {
++    return safeStorage()?.getItem(LAST_TRACK_KEY) === `${new Date().toDateString()}|${mode}`;
++  } catch {
++    return false;
++  }
++}
++
++export function rememberTrackedToday(mode: DisplayMode) {
++  try {
++    safeStorage()?.setItem(LAST_TRACK_KEY, `${new Date().toDateString()}|${mode}`);
++  } catch {
++    // abaikan
++  }
++}
++
++/** Data pelacakan untuk ikut dikirim saat checkout. Kosong untuk perangkat internal. */
++export function getCheckoutTracking(): { source: DisplayMode; visitorId: string } | null {
++  if (isInternalDevice()) return null;
++  return { source: getDisplayMode(), visitorId: getVisitorId() };
++}
+diff --git a/supabase/migrations/20260928_pwa_analytics.sql b/supabase/migrations/20260928_pwa_analytics.sql
+new file mode 100644
+index 0000000..3115364
+--- /dev/null
++++ b/supabase/migrations/20260928_pwa_analytics.sql
+@@ -0,0 +1,36 @@
++-- Statistik penggunaan PWA: berapa perangkat unik yang membuka katalog lewat
++-- PWA (terpasang di layar utama) vs browser biasa, dan dari mana pesanan datang.
++--
++-- Privasi: visitor_id adalah UUID acak yang dibuat di perangkat pengunjung
++-- (localStorage). Tidak ada nama, nomor HP, atau data pribadi di tabel ini.
++-- Satu perangkat dihitung sekali per hari per mode (unique constraint di bawah).
++
++create table if not exists public.pwa_visits (
++  id uuid primary key default gen_random_uuid(),
++  visitor_id text not null check (visitor_id ~ '^[A-Za-z0-9_-]{8,64}$'),
++  display_mode text not null check (display_mode in ('pwa', 'browser')),
++  visit_date date not null,
++  created_at timestamptz not null default now(),
++  unique (visitor_id, visit_date, display_mode)
++);
++
++create index if not exists pwa_visits_date_mode_idx
++  on public.pwa_visits (visit_date, display_mode);
++
++-- Tabel ini cuma boleh disentuh server (service_role), sama seperti
++-- push_subscriptions: RLS aktif tanpa policy + semua hak publik dicabut.
++alter table public.pwa_visits enable row level security;
++revoke all on public.pwa_visits from public, anon, authenticated;
++
++-- Sumber pesanan, diisi server setelah order dibuat. Pesanan lama tetap NULL
++-- (dihitung sebagai "belum terlacak" di dashboard, bukan ditebak).
++alter table public.orders add column if not exists order_source text;
++alter table public.orders add column if not exists visitor_id text;
++
++alter table public.orders drop constraint if exists orders_order_source_check;
++alter table public.orders
++  add constraint orders_order_source_check
++  check (order_source is null or order_source in ('pwa', 'browser'));
++
++create index if not exists orders_source_created_idx
++  on public.orders (order_source, created_at);
