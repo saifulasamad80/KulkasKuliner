@@ -228,9 +228,12 @@ export async function POST(request: Request) {
       '',
       'Mohon infokan ongkos kirim Instan/Sameday beserta total transfer.',
       '',
-      '*Transfer ke:*',
+      '*Transfer ke salah satu rekening:*',
       'Bank Mandiri a.n. Sari Giyanti',
       'No. Rek: 1040004130840',
+      '',
+      'Bank BNI a.n. Sari Giyanti',
+      'No. Rek: 1901349111',
       '',
       'Terima kasih.',
     ].join('\n');
