@@ -106,6 +106,15 @@ function createChatAdvertisement(products: Product[], favoriteMenus: FavoriteMen
     "Klik katalog dan amankan favoritmu sebelum kehabisan.",
   ];
 
+  // Ajakan share ulang ke penerima pesan -- pakai seed beda dari rotationSeed (yang
+  // pakai kelipatan 3) supaya nggak kena bug modulo yang sama seperti FOMO.
+  const shareInvites = [
+    "💌 Suka info ini? Share ke temen atau keluarga kamu juga ya!",
+    "🔄 Kalau berguna, bagikan ke grup WA kamu biar temen lain juga tahu.",
+    "📲 Jangan lupa share ke yang lagi cari frozen food juga!",
+  ];
+  const shareInvite = shareInvites[fomoRotationSeed % shareInvites.length];
+
   const fomoLine = getFomoLine(fomoProduct, favoriteMenus);
   const featuredText = featuredProducts.length > 0
     ? ["\nMenu siap:", ...featuredProducts.map(formatProductLine)].join("\n")
@@ -122,6 +131,8 @@ function createChatAdvertisement(products: Product[], favoriteMenus: FavoriteMen
     "",
     callsToAction[rotation],
     `👉 ${siteUrl}`,
+    "",
+    shareInvite,
   ].join("\n").replace(/\n{3,}/g, "\n\n");
 
   // Every product actually named in the message — the FOMO line's item plus
@@ -150,6 +161,11 @@ function createStatusAdvertisement(products: Product[], favoriteMenus: FavoriteM
     "Buruan order, kurir siap jalan",
     "Amankan menu favoritmu sekarang",
   ];
+  const shortShareInvites = [
+    "💌 Share ke temen kamu juga ya!",
+    "🔄 Bagikan ke grup WA kamu ya!",
+    "📲 Share biar temen lain juga tahu!",
+  ];
 
   const message = [
     "🍽️ *KULKASKULINER*",
@@ -157,6 +173,7 @@ function createStatusAdvertisement(products: Product[], favoriteMenus: FavoriteM
     getFomoLine(fomoProduct, favoriteMenus),
     `${ctas[rotationSeed % ctas.length]} 👇`,
     siteUrl,
+    shortShareInvites[fomoRotationSeed % shortShareInvites.length],
   ].join("\n");
 
   return { message, featuredProductIds: fomoProduct ? [fomoProduct.id] : [] };

@@ -73,10 +73,16 @@ function getStockFomo(products: Product[], favoriteMenus: FavoriteMenu[]) {
     : "Jangan ditunda sampai lapar datang dan pilihan makan jadi terburu-buru—cek menu yang masih tersedia sekarang.";
 }
 
-function createCommonCopy(context: TimeContext, audienceMoment: AudienceMoment, productNames: string, stockFomo: string, catalogUrl: string) {
+function createCommonCopy(context: TimeContext, audienceMoment: AudienceMoment, productNames: string, stockFomo: string, catalogUrl: string, generation: number) {
   const greeting = getGreeting(context.hour);
-  const caption = `🍽️ ${greeting}! ${audienceMoment.hook}\n\nFavorit pelanggan: ${productNames}.\n${stockFomo}\n\n${audienceMoment.cta}\n${catalogUrl}`;
-  const story = `${audienceMoment.hook}\n\n${productNames}\n\n${stockFomo}\n\nCek katalog → link di bio\n${catalogUrl}`;
+  const shareInvites = [
+    "🔄 Suka postingan ini? Share ke Story kamu, tag temen yang cocok!",
+    "📲 Jangan lupa share ke temen yang lagi nyari ide makan juga!",
+    "💌 Kalau berguna, bagikan ke grup kamu ya!",
+  ];
+  const shareInvite = shareInvites[generation % shareInvites.length];
+  const caption = `🍽️ ${greeting}! ${audienceMoment.hook}\n\nFavorit pelanggan: ${productNames}.\n${stockFomo}\n\n${audienceMoment.cta}\n\n${shareInvite}\n${catalogUrl}`;
+  const story = `${audienceMoment.hook}\n\n${productNames}\n\n${stockFomo}\n\n${shareInvite}\n\nCek katalog → link di bio\n${catalogUrl}`;
   return { caption, story };
 }
 
@@ -88,7 +94,7 @@ function createSlideshowCopy(products: Product[], favoriteMenus: FavoriteMenu[],
   const productNames = selectedProducts.length > 0 ? selectedProducts.map(getProductLabel).join(" dan ") : "menu frozen food yang tersedia";
   const stockFomo = getStockFomo(products, favoriteMenus);
   const catalogUrl = getCatalogUrl();
-  const { caption, story } = createCommonCopy(context, audienceMoment, productNames, stockFomo, catalogUrl);
+  const { caption, story } = createCommonCopy(context, audienceMoment, productNames, stockFomo, catalogUrl, generation);
   return { caption, story, hook: audienceMoment.hook, cta: audienceMoment.cta, catalogUrl };
 }
 
@@ -102,7 +108,7 @@ function createSocialContent(products: Product[], favoriteMenus: FavoriteMenu[],
   const productNames = fallbackProducts.length > 0 ? fallbackProducts.map(getProductLabel).join(" dan ") : "menu frozen food yang tersedia";
   const stockFomo = getStockFomo(products, favoriteMenus);
   const catalogUrl = getCatalogUrl();
-  const { caption, story } = createCommonCopy(context, audienceMoment, productNames, stockFomo, catalogUrl);
+  const { caption, story } = createCommonCopy(context, audienceMoment, productNames, stockFomo, catalogUrl, generation);
 
   if (mode === "carousel") {
     const photoStatus = selectedProducts.length > 0

@@ -1,0 +1,91 @@
+diff --git a/src/components/SocialContentGenerator.tsx b/src/components/SocialContentGenerator.tsx
+index 4fbdc3a..242233d 100755
+--- a/src/components/SocialContentGenerator.tsx
++++ b/src/components/SocialContentGenerator.tsx
+@@ -73,10 +73,16 @@ function getStockFomo(products: Product[], favoriteMenus: FavoriteMenu[]) {
+     : "Jangan ditunda sampai lapar datang dan pilihan makan jadi terburu-buru—cek menu yang masih tersedia sekarang.";
+ }
+ 
+-function createCommonCopy(context: TimeContext, audienceMoment: AudienceMoment, productNames: string, stockFomo: string, catalogUrl: string) {
++function createCommonCopy(context: TimeContext, audienceMoment: AudienceMoment, productNames: string, stockFomo: string, catalogUrl: string, generation: number) {
+   const greeting = getGreeting(context.hour);
+-  const caption = `🍽️ ${greeting}! ${audienceMoment.hook}\n\nFavorit pelanggan: ${productNames}.\n${stockFomo}\n\n${audienceMoment.cta}\n${catalogUrl}`;
+-  const story = `${audienceMoment.hook}\n\n${productNames}\n\n${stockFomo}\n\nCek katalog → link di bio\n${catalogUrl}`;
++  const shareInvites = [
++    "🔄 Suka postingan ini? Share ke Story kamu, tag temen yang cocok!",
++    "📲 Jangan lupa share ke temen yang lagi nyari ide makan juga!",
++    "💌 Kalau berguna, bagikan ke grup kamu ya!",
++  ];
++  const shareInvite = shareInvites[generation % shareInvites.length];
++  const caption = `🍽️ ${greeting}! ${audienceMoment.hook}\n\nFavorit pelanggan: ${productNames}.\n${stockFomo}\n\n${audienceMoment.cta}\n\n${shareInvite}\n${catalogUrl}`;
++  const story = `${audienceMoment.hook}\n\n${productNames}\n\n${stockFomo}\n\n${shareInvite}\n\nCek katalog → link di bio\n${catalogUrl}`;
+   return { caption, story };
+ }
+ 
+@@ -88,7 +94,7 @@ function createSlideshowCopy(products: Product[], favoriteMenus: FavoriteMenu[],
+   const productNames = selectedProducts.length > 0 ? selectedProducts.map(getProductLabel).join(" dan ") : "menu frozen food yang tersedia";
+   const stockFomo = getStockFomo(products, favoriteMenus);
+   const catalogUrl = getCatalogUrl();
+-  const { caption, story } = createCommonCopy(context, audienceMoment, productNames, stockFomo, catalogUrl);
++  const { caption, story } = createCommonCopy(context, audienceMoment, productNames, stockFomo, catalogUrl, generation);
+   return { caption, story, hook: audienceMoment.hook, cta: audienceMoment.cta, catalogUrl };
+ }
+ 
+@@ -102,7 +108,7 @@ function createSocialContent(products: Product[], favoriteMenus: FavoriteMenu[],
+   const productNames = fallbackProducts.length > 0 ? fallbackProducts.map(getProductLabel).join(" dan ") : "menu frozen food yang tersedia";
+   const stockFomo = getStockFomo(products, favoriteMenus);
+   const catalogUrl = getCatalogUrl();
+-  const { caption, story } = createCommonCopy(context, audienceMoment, productNames, stockFomo, catalogUrl);
++  const { caption, story } = createCommonCopy(context, audienceMoment, productNames, stockFomo, catalogUrl, generation);
+ 
+   if (mode === "carousel") {
+     const photoStatus = selectedProducts.length > 0
+diff --git a/src/components/WhatsAppAdGenerator.tsx b/src/components/WhatsAppAdGenerator.tsx
+index 3ac38f4..158974c 100755
+--- a/src/components/WhatsAppAdGenerator.tsx
++++ b/src/components/WhatsAppAdGenerator.tsx
+@@ -106,6 +106,15 @@ function createChatAdvertisement(products: Product[], favoriteMenus: FavoriteMen
+     "Klik katalog dan amankan favoritmu sebelum kehabisan.",
+   ];
+ 
++  // Ajakan share ulang ke penerima pesan -- pakai seed beda dari rotationSeed (yang
++  // pakai kelipatan 3) supaya nggak kena bug modulo yang sama seperti FOMO.
++  const shareInvites = [
++    "💌 Suka info ini? Share ke temen atau keluarga kamu juga ya!",
++    "🔄 Kalau berguna, bagikan ke grup WA kamu biar temen lain juga tahu.",
++    "📲 Jangan lupa share ke yang lagi cari frozen food juga!",
++  ];
++  const shareInvite = shareInvites[fomoRotationSeed % shareInvites.length];
++
+   const fomoLine = getFomoLine(fomoProduct, favoriteMenus);
+   const featuredText = featuredProducts.length > 0
+     ? ["\nMenu siap:", ...featuredProducts.map(formatProductLine)].join("\n")
+@@ -122,6 +131,8 @@ function createChatAdvertisement(products: Product[], favoriteMenus: FavoriteMen
+     "",
+     callsToAction[rotation],
+     `👉 ${siteUrl}`,
++    "",
++    shareInvite,
+   ].join("\n").replace(/\n{3,}/g, "\n\n");
+ 
+   // Every product actually named in the message — the FOMO line's item plus
+@@ -150,6 +161,11 @@ function createStatusAdvertisement(products: Product[], favoriteMenus: FavoriteM
+     "Buruan order, kurir siap jalan",
+     "Amankan menu favoritmu sekarang",
+   ];
++  const shortShareInvites = [
++    "💌 Share ke temen kamu juga ya!",
++    "🔄 Bagikan ke grup WA kamu ya!",
++    "📲 Share biar temen lain juga tahu!",
++  ];
+ 
+   const message = [
+     "🍽️ *KULKASKULINER*",
+@@ -157,6 +173,7 @@ function createStatusAdvertisement(products: Product[], favoriteMenus: FavoriteM
+     getFomoLine(fomoProduct, favoriteMenus),
+     `${ctas[rotationSeed % ctas.length]} 👇`,
+     siteUrl,
++    shortShareInvites[fomoRotationSeed % shortShareInvites.length],
+   ].join("\n");
+ 
+   return { message, featuredProductIds: fomoProduct ? [fomoProduct.id] : [] };
