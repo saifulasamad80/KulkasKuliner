@@ -1,0 +1,208 @@
+diff --git a/package.json b/package.json
+index 5ca5f1a..fdb8f2b 100644
+--- a/package.json
++++ b/package.json
+@@ -10,7 +10,7 @@
+   },
+   "dependencies": {
+     "@supabase/supabase-js": "^2.112.4",
+-    "next": "16.3.3",
++    "next": "16.3.6",
+     "react": "19.2.8",
+     "react-dom": "19.2.8",
+     "web-push": "^3.6.7",
+@@ -24,7 +24,7 @@
+     "@types/react-dom": "^19",
+     "@types/web-push": "^3.6.4",
+     "eslint": "^9",
+-    "eslint-config-next": "16.3.3",
++    "eslint-config-next": "16.3.6",
+     "tailwindcss": "^4",
+     "typescript": "^5"
+   }
+diff --git a/src/app/cart/page.tsx b/src/app/cart/page.tsx
+index 409ed7b..8d7b50f 100755
+--- a/src/app/cart/page.tsx
++++ b/src/app/cart/page.tsx
+@@ -1,11 +1,61 @@
+ "use client";
+ 
+ import { useCartStore } from '@/store/useCartStore';
+-import { useState, useEffect, useRef } from 'react';
++import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+ import Link from 'next/link';
+ import type { CheckoutResponse } from '@/lib/types';
+ import { getCheckoutTracking } from '@/lib/pwa-client';
+ 
++// Contact Picker API cuma didukung Chrome Android (dan browser Chromium di
++// Android) -- tidak ada di iOS Safari maupun desktop mana pun. Deteksi lewat
++// useSyncExternalStore (bukan useEffect+setState) supaya server dan klien
++// render hal yang sama saat hydrasi, baru tombolnya muncul setelah mount.
++function subscribeToNothing() {
++  return () => {};
++}
++function getContactPickerSupportSnapshot() {
++  return (
++    typeof navigator !== 'undefined' &&
++    'contacts' in navigator &&
++    typeof (navigator as Navigator & { contacts?: { select?: unknown } }).contacts?.select === 'function'
++  );
++}
++function getContactPickerSupportServerSnapshot() {
++  return false;
++}
++
++/** Nomor dari kontak bisa "+62 812-3456-789" dsb -- disamakan ke format lokal 08xxx yang dipakai validasi checkout. */
++function normalizePickedPhone(raw: string) {
++  const digits = raw.replace(/\D/g, '');
++  if (digits.startsWith('62')) return `0${digits.slice(2)}`;
++  return digits;
++}
++
++// Diingat di browser ini saja (localStorage), bukan akun -- jadi berlaku di
++// SEMUA HP termasuk iPhone, bukan cuma Chrome Android seperti Contact Picker
++// di atas. Cuma nama & nomor, bukan alamat, karena alamat lebih sering ganti.
++const SAVED_CONTACT_KEY = 'kk_checkout_contact';
++
++function loadSavedContact(): { name: string; phone: string } | null {
++  try {
++    const raw = window.localStorage.getItem(SAVED_CONTACT_KEY);
++    if (!raw) return null;
++    const parsed = JSON.parse(raw) as { name?: unknown; phone?: unknown };
++    if (typeof parsed.name !== 'string' || typeof parsed.phone !== 'string') return null;
++    return { name: parsed.name, phone: parsed.phone };
++  } catch {
++    return null;
++  }
++}
++
++function saveContactForNextTime(name: string, phone: string) {
++  try {
++    window.localStorage.setItem(SAVED_CONTACT_KEY, JSON.stringify({ name, phone }));
++  } catch {
++    // Storage penuh/diblokir -- nggak masalah, checkout tetap jalan tanpa ini.
++  }
++}
++
+ export default function CartPage() {
+   const {
+     items,
+@@ -21,10 +71,13 @@ export default function CartPage() {
+   const checkoutInFlightRef = useRef(false);
+   const [syncingStock, setSyncingStock] = useState(true);
+   
+-  const [formData, setFormData] = useState({
+-    name: '',
+-    phone: '',
+-    notes: '' 
++  // Lazy initializer (bukan useEffect+setState): aman di sini karena form ini
++  // baru pernah dirender setelah gerbang syncingStock di bawah selesai (murni
++  // di klien), jadi nggak ada jendela waktu di mana hasil server/hidrasi
++  // beda dengan hasil baca localStorage ini.
++  const [formData, setFormData] = useState(() => {
++    const saved = typeof window === 'undefined' ? null : loadSavedContact();
++    return { name: saved?.name ?? '', phone: saved?.phone ?? '', notes: '' };
+   });
+   
+   const [kodePos, setKodePos] = useState('');
+@@ -36,6 +89,51 @@ export default function CartPage() {
+   const [isFetchingZip, setIsFetchingZip] = useState(false);
+   const [zipError, setZipError] = useState(false);
+ 
++  const canPickContact = useSyncExternalStore(subscribeToNothing, getContactPickerSupportSnapshot, getContactPickerSupportServerSnapshot);
++  const [isPickingContact, setIsPickingContact] = useState(false);
++  const [wasAutoFilled, setWasAutoFilled] = useState(() => typeof window !== 'undefined' && loadSavedContact() !== null);
++
++  const clearAutoFilledContact = () => {
++    setFormData((current) => ({ ...current, name: '', phone: '' }));
++    setWasAutoFilled(false);
++    try {
++      window.localStorage.removeItem(SAVED_CONTACT_KEY);
++    } catch {
++      // abaikan
++    }
++  };
++
++  const pickFromContacts = async () => {
++    setIsPickingContact(true);
++    try {
++      const nav = navigator as Navigator & {
++        contacts: { select: (properties: string[], options?: { multiple?: boolean }) => Promise<Array<{ name?: string[]; tel?: string[] }>> };
++      };
++      const [contact] = await nav.contacts.select(['name', 'tel'], { multiple: false });
++      if (!contact) return; // dibatalkan pengguna
++
++      const pickedName = contact.name?.[0]?.trim();
++      const pickedPhone = contact.tel?.[0] ? normalizePickedPhone(contact.tel[0]) : '';
++      setFormData((current) => ({
++        ...current,
++        name: pickedName || current.name,
++        phone: pickedPhone || current.phone,
++      }));
++      setWasAutoFilled(false);
++
++      if (contact.tel && contact.tel.length > 1 && !pickedPhone) {
++        alert('Nomor dari kontak formatnya nggak biasa, coba cek lagi ya.');
++      }
++    } catch (error) {
++      // AbortError = pengguna menutup dialog kontak, bukan masalah.
++      if (!(error instanceof DOMException && error.name === 'AbortError')) {
++        alert('Gagal mengambil kontak. Isi manual aja, ya.');
++      }
++    } finally {
++      setIsPickingContact(false);
++    }
++  };
++
+   useEffect(() => {
+     let isActive = true;
+ 
+@@ -190,6 +288,7 @@ export default function CartPage() {
+         throw new Error('error' in result && result.error ? result.error : 'Checkout gagal.');
+       }
+ 
++      saveContactForNextTime(validated.cleanName, formData.phone);
+       clearCart();
+       window.open(result.whatsappUrl, '_self');
+     } catch (error) {
+@@ -279,11 +378,29 @@ export default function CartPage() {
+               </p>
+             </div>
+ 
++            {wasAutoFilled && (
++              <div className="flex items-center justify-between gap-2 bg-green-50 border border-green-200 rounded-[12px] px-3 py-2 text-xs text-green-800">
++                <span>✓ Nama &amp; No. WhatsApp diisi otomatis dari pesanan terakhir di HP ini.</span>
++                <button type="button" onClick={clearAutoFilledContact} className="font-bold underline shrink-0">Bukan saya</button>
++              </div>
++            )}
++
++            {canPickContact && (
++              <button
++                type="button"
++                onClick={() => void pickFromContacts()}
++                disabled={isPickingContact}
++                className="w-full flex items-center justify-center gap-2 bg-white text-red-700 border-2 border-dashed border-red-300 rounded-[12px] p-3 text-sm font-bold hover:bg-red-50 transition-colors disabled:opacity-50"
++              >
++                📇 {isPickingContact ? 'Membuka kontak…' : 'Isi dari Kontak HP'}
++              </button>
++            )}
++
+             <div>
+               <label className="block text-sm font-semibold text-gray-700 mb-1">Nama Penerima</label>
+-              <input type="text" required 
++              <input type="text" autoComplete="name" required 
+                 className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all" 
+-                value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})}
++                value={formData.name} onChange={(e) => { setFormData({...formData, name: e.target.value}); setWasAutoFilled(false); }}
+                 placeholder="Nama Anda"
+               />
+             </div>
+@@ -291,7 +408,7 @@ export default function CartPage() {
+               <label className="block text-sm font-semibold text-gray-700 mb-1">No. WhatsApp</label>
+               <input type="tel" inputMode="tel" autoComplete="tel" required
+                 className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all" 
+-                value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})}
++                value={formData.phone} onChange={(e) => { setFormData({...formData, phone: e.target.value}); setWasAutoFilled(false); }}
+                 placeholder="08123456789"
+               />
+             </div>

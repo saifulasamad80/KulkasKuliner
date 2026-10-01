@@ -1,0 +1,100 @@
+diff --git a/src/app/cart/page.tsx b/src/app/cart/page.tsx
+index 409ed7b..5ed2e7d 100755
+--- a/src/app/cart/page.tsx
++++ b/src/app/cart/page.tsx
+@@ -1,11 +1,36 @@
+ "use client";
+ 
+ import { useCartStore } from '@/store/useCartStore';
+-import { useState, useEffect, useRef } from 'react';
++import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+ import Link from 'next/link';
+ import type { CheckoutResponse } from '@/lib/types';
+ import { getCheckoutTracking } from '@/lib/pwa-client';
+ 
++// Contact Picker API cuma didukung Chrome Android (dan browser Chromium di
++// Android) -- tidak ada di iOS Safari maupun desktop mana pun. Deteksi lewat
++// useSyncExternalStore (bukan useEffect+setState) supaya server dan klien
++// render hal yang sama saat hydrasi, baru tombolnya muncul setelah mount.
++function subscribeToNothing() {
++  return () => {};
++}
++function getContactPickerSupportSnapshot() {
++  return (
++    typeof navigator !== 'undefined' &&
++    'contacts' in navigator &&
++    typeof (navigator as Navigator & { contacts?: { select?: unknown } }).contacts?.select === 'function'
++  );
++}
++function getContactPickerSupportServerSnapshot() {
++  return false;
++}
++
++/** Nomor dari kontak bisa "+62 812-3456-789" dsb -- disamakan ke format lokal 08xxx yang dipakai validasi checkout. */
++function normalizePickedPhone(raw: string) {
++  const digits = raw.replace(/\D/g, '');
++  if (digits.startsWith('62')) return `0${digits.slice(2)}`;
++  return digits;
++}
++
+ export default function CartPage() {
+   const {
+     items,
+@@ -36,6 +61,39 @@ export default function CartPage() {
+   const [isFetchingZip, setIsFetchingZip] = useState(false);
+   const [zipError, setZipError] = useState(false);
+ 
++  const canPickContact = useSyncExternalStore(subscribeToNothing, getContactPickerSupportSnapshot, getContactPickerSupportServerSnapshot);
++  const [isPickingContact, setIsPickingContact] = useState(false);
++
++  const pickFromContacts = async () => {
++    setIsPickingContact(true);
++    try {
++      const nav = navigator as Navigator & {
++        contacts: { select: (properties: string[], options?: { multiple?: boolean }) => Promise<Array<{ name?: string[]; tel?: string[] }>> };
++      };
++      const [contact] = await nav.contacts.select(['name', 'tel'], { multiple: false });
++      if (!contact) return; // dibatalkan pengguna
++
++      const pickedName = contact.name?.[0]?.trim();
++      const pickedPhone = contact.tel?.[0] ? normalizePickedPhone(contact.tel[0]) : '';
++      setFormData((current) => ({
++        ...current,
++        name: pickedName || current.name,
++        phone: pickedPhone || current.phone,
++      }));
++
++      if (contact.tel && contact.tel.length > 1 && !pickedPhone) {
++        alert('Nomor dari kontak formatnya nggak biasa, coba cek lagi ya.');
++      }
++    } catch (error) {
++      // AbortError = pengguna menutup dialog kontak, bukan masalah.
++      if (!(error instanceof DOMException && error.name === 'AbortError')) {
++        alert('Gagal mengambil kontak. Isi manual aja, ya.');
++      }
++    } finally {
++      setIsPickingContact(false);
++    }
++  };
++
+   useEffect(() => {
+     let isActive = true;
+ 
+@@ -279,6 +337,17 @@ export default function CartPage() {
+               </p>
+             </div>
+ 
++            {canPickContact && (
++              <button
++                type="button"
++                onClick={() => void pickFromContacts()}
++                disabled={isPickingContact}
++                className="w-full flex items-center justify-center gap-2 bg-white text-red-700 border-2 border-dashed border-red-300 rounded-[12px] p-3 text-sm font-bold hover:bg-red-50 transition-colors disabled:opacity-50"
++              >
++                📇 {isPickingContact ? 'Membuka kontak…' : 'Isi dari Kontak HP'}
++              </button>
++            )}
++
+             <div>
+               <label className="block text-sm font-semibold text-gray-700 mb-1">Nama Penerima</label>
+               <input type="text" required 
