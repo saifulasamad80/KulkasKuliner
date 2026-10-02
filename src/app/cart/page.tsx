@@ -33,24 +33,40 @@ function normalizePickedPhone(raw: string) {
 
 // Diingat di browser ini saja (localStorage), bukan akun -- jadi berlaku di
 // SEMUA HP termasuk iPhone, bukan cuma Chrome Android seperti Contact Picker
-// di atas. Cuma nama & nomor, bukan alamat, karena alamat lebih sering ganti.
-const SAVED_CONTACT_KEY = 'kk_checkout_contact';
+// di atas. Sekarang termasuk alamat lengkap, bukan cuma nama & nomor --
+// pelanggan frozen food umumnya kirim ke alamat yang sama tiap pesan.
+const SAVED_INFO_KEY = 'kk_checkout_info';
 
-function loadSavedContact(): { name: string; phone: string } | null {
+type SavedCheckoutInfo = {
+  name: string;
+  phone: string;
+  kodePos: string;
+  kota: string;
+  kecamatan: string;
+  kelurahan: string;
+  detailJalan: string;
+};
+
+function loadSavedInfo(): SavedCheckoutInfo | null {
   try {
-    const raw = window.localStorage.getItem(SAVED_CONTACT_KEY);
+    const raw = window.localStorage.getItem(SAVED_INFO_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { name?: unknown; phone?: unknown };
-    if (typeof parsed.name !== 'string' || typeof parsed.phone !== 'string') return null;
-    return { name: parsed.name, phone: parsed.phone };
+    const parsed = JSON.parse(raw) as Partial<Record<keyof SavedCheckoutInfo, unknown>>;
+    const fields: (keyof SavedCheckoutInfo)[] = ['name', 'phone', 'kodePos', 'kota', 'kecamatan', 'kelurahan', 'detailJalan'];
+    const result = {} as SavedCheckoutInfo;
+    for (const field of fields) {
+      if (typeof parsed[field] !== 'string') return null;
+      result[field] = parsed[field] as string;
+    }
+    return result;
   } catch {
     return null;
   }
 }
 
-function saveContactForNextTime(name: string, phone: string) {
+function saveInfoForNextTime(info: SavedCheckoutInfo) {
   try {
-    window.localStorage.setItem(SAVED_CONTACT_KEY, JSON.stringify({ name, phone }));
+    window.localStorage.setItem(SAVED_INFO_KEY, JSON.stringify(info));
   } catch {
     // Storage penuh/diblokir -- nggak masalah, checkout tetap jalan tanpa ini.
   }
@@ -71,33 +87,42 @@ export default function CartPage() {
   const checkoutInFlightRef = useRef(false);
   const [syncingStock, setSyncingStock] = useState(true);
   
-  // Lazy initializer (bukan useEffect+setState): aman di sini karena form ini
+  // Dipanggil langsung (bukan lewat ref/effect): aman di sini karena form ini
   // baru pernah dirender setelah gerbang syncingStock di bawah selesai (murni
-  // di klien), jadi nggak ada jendela waktu di mana hasil server/hidrasi
-  // beda dengan hasil baca localStorage ini.
-  const [formData, setFormData] = useState(() => {
-    const saved = typeof window === 'undefined' ? null : loadSavedContact();
-    return { name: saved?.name ?? '', phone: saved?.phone ?? '', notes: '' };
-  });
-  
-  const [kodePos, setKodePos] = useState('');
-  const [kota, setKota] = useState('');
-  const [kecamatan, setKecamatan] = useState('');
-  const [kelurahan, setKelurahan] = useState('');
-  const [detailJalan, setDetailJalan] = useState('');
+  // di klien), jadi nggak ada jendela waktu di mana hasil server/hidrasi beda
+  // dengan hasil baca localStorage ini. Baca localStorage murah & read-only,
+  // nggak melanggar aturan "no side effects during render".
+  const initialSavedInfo = typeof window === 'undefined' ? null : loadSavedInfo();
+
+  const [formData, setFormData] = useState(() => ({
+    name: initialSavedInfo?.name ?? '',
+    phone: initialSavedInfo?.phone ?? '',
+    notes: '',
+  }));
+
+  const [kodePos, setKodePos] = useState(() => initialSavedInfo?.kodePos ?? '');
+  const [kota, setKota] = useState(() => initialSavedInfo?.kota ?? '');
+  const [kecamatan, setKecamatan] = useState(() => initialSavedInfo?.kecamatan ?? '');
+  const [kelurahan, setKelurahan] = useState(() => initialSavedInfo?.kelurahan ?? '');
+  const [detailJalan, setDetailJalan] = useState(() => initialSavedInfo?.detailJalan ?? '');
   
   const [isFetchingZip, setIsFetchingZip] = useState(false);
   const [zipError, setZipError] = useState(false);
 
   const canPickContact = useSyncExternalStore(subscribeToNothing, getContactPickerSupportSnapshot, getContactPickerSupportServerSnapshot);
   const [isPickingContact, setIsPickingContact] = useState(false);
-  const [wasAutoFilled, setWasAutoFilled] = useState(() => typeof window !== 'undefined' && loadSavedContact() !== null);
+  const [wasAutoFilled, setWasAutoFilled] = useState(() => Boolean(initialSavedInfo?.name));
 
-  const clearAutoFilledContact = () => {
+  const clearAutoFilledInfo = () => {
     setFormData((current) => ({ ...current, name: '', phone: '' }));
+    setKodePos('');
+    setKota('');
+    setKecamatan('');
+    setKelurahan('');
+    setDetailJalan('');
     setWasAutoFilled(false);
     try {
-      window.localStorage.removeItem(SAVED_CONTACT_KEY);
+      window.localStorage.removeItem(SAVED_INFO_KEY);
     } catch {
       // abaikan
     }
@@ -196,7 +221,8 @@ export default function CartPage() {
   const handleKodePosChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/\D/g, ''); 
     setKodePos(val);
-    setZipError(false); 
+    setZipError(false);
+    setWasAutoFilled(false);
     if (val.length < 5) {
       setKota('');
       setKecamatan('');
@@ -288,7 +314,15 @@ export default function CartPage() {
         throw new Error('error' in result && result.error ? result.error : 'Checkout gagal.');
       }
 
-      saveContactForNextTime(validated.cleanName, formData.phone);
+      saveInfoForNextTime({
+        name: validated.cleanName,
+        phone: formData.phone,
+        kodePos,
+        kota: kota.trim(),
+        kecamatan: kecamatan.trim(),
+        kelurahan: kelurahan.trim(),
+        detailJalan: detailJalan.trim(),
+      });
       clearCart();
       window.open(result.whatsappUrl, '_self');
     } catch (error) {
@@ -380,8 +414,8 @@ export default function CartPage() {
 
             {wasAutoFilled && (
               <div className="flex items-center justify-between gap-2 bg-green-50 border border-green-200 rounded-[12px] px-3 py-2 text-xs text-green-800">
-                <span>✓ Nama &amp; No. WhatsApp diisi otomatis dari pesanan terakhir di HP ini.</span>
-                <button type="button" onClick={clearAutoFilledContact} className="font-bold underline shrink-0">Bukan saya</button>
+                <span>✓ Data diisi otomatis dari pesanan terakhir di HP ini.</span>
+                <button type="button" onClick={clearAutoFilledInfo} className="font-bold underline shrink-0">Bukan saya</button>
               </div>
             )}
 
@@ -416,9 +450,9 @@ export default function CartPage() {
             <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
                <div>
                  <label className="block text-sm font-semibold text-gray-700 mb-1">Detail Jalan & Patokan</label>
-                 <textarea required rows={2} 
+                 <textarea required rows={2} autoComplete="street-address"
                    className="w-full bg-white text-gray-900 placeholder-gray-400 border border-gray-300 rounded-[12px] p-3 focus:ring-2 focus:ring-red-600 outline-none shadow-sm transition-all" 
-                   value={detailJalan} onChange={(e) => setDetailJalan(e.target.value)}
+                   value={detailJalan} onChange={(e) => { setDetailJalan(e.target.value); setWasAutoFilled(false); }}
                    placeholder="Contoh: Jl. Pahlawan No.12, Rumah pagar hitam..."
                  />
                </div>
@@ -448,17 +482,17 @@ export default function CartPage() {
                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Kelurahan</label>
-                   <input type="text" autoComplete="address-level4" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-base sm:text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kelurahan} onChange={(e) => setKelurahan(e.target.value)} placeholder="Kelurahan" />
+                   <input type="text" autoComplete="address-level4" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-base sm:text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kelurahan} onChange={(e) => { setKelurahan(e.target.value); setWasAutoFilled(false); }} placeholder="Kelurahan" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Kecamatan</label>
-                   <input type="text" autoComplete="address-level3" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-base sm:text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kecamatan} onChange={(e) => setKecamatan(e.target.value)} placeholder="Kecamatan" />
+                   <input type="text" autoComplete="address-level3" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-base sm:text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kecamatan} onChange={(e) => { setKecamatan(e.target.value); setWasAutoFilled(false); }} placeholder="Kecamatan" />
                   </div>
                </div>
 
                <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1">Kota/Kabupaten</label>
-                   <input type="text" autoComplete="address-level2" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-base sm:text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kota} onChange={(e) => setKota(e.target.value)} placeholder="Kota/Kabupaten" />
+                   <input type="text" autoComplete="address-level2" required className="w-full bg-white text-gray-900 border border-gray-300 rounded-[8px] p-2 text-base sm:text-sm focus:ring-1 focus:ring-red-600 outline-none" value={kota} onChange={(e) => { setKota(e.target.value); setWasAutoFilled(false); }} placeholder="Kota/Kabupaten" />
                </div>
             </div>
 
