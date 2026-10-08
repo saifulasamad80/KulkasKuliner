@@ -1,4 +1,4 @@
-import type { FavoriteMenu, Product } from '@/lib/types';
+import { getProductMenu, type FavoriteMenu, type Product } from '@/lib/types';
 
 export const JAKARTA_TIME_ZONE = 'Asia/Jakarta';
 
@@ -41,8 +41,31 @@ export function getTimeGreeting(hour: number) {
 }
 
 /** Product name plus variant, e.g. "Nasi Goreng Ayam". */
+function normalizeLabel(text: string) {
+  return text.toLocaleLowerCase('id-ID').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Nama tampilan produk. Varian memakai nama menu induknya (sama seperti di
+ * katalog), lalu nama varian HANYA ditempel kalau memang menambah info --
+ * sebelumnya ditempel mentah-mentah, sehingga data seperti menu "Durian
+ * Montong" + varian "Montong" tampil "Durian Montong Montong" di iklan,
+ * video, dan laporan.
+ */
 export function getProductLabel(product: Product) {
-  return `${product.name}${product.variant_name ? ` ${product.variant_name}` : ''}`.trim();
+  const variant = product.variant_name?.trim() ?? '';
+  const base = ((variant ? getProductMenu(product)?.name : null) || product.name).trim();
+  if (!variant) return base;
+
+  const normalizedBase = normalizeLabel(base);
+  const normalizedVariant = normalizeLabel(variant);
+  if (normalizedBase.includes(normalizedVariant)) return base;
+  if (normalizedVariant.includes(normalizedBase)) return variant;
+
+  // Buang kata varian yang sudah ada di nama menu: "Nasi Goreng" + "Goreng Pedas" -> "Nasi Goreng Pedas".
+  const baseWords = new Set(normalizedBase.split(' '));
+  const extraWords = variant.split(/\s+/).filter((word) => !baseWords.has(normalizeLabel(word)));
+  return extraWords.length > 0 ? `${base} ${extraWords.join(' ')}` : base;
 }
 
 /** Products that are published and currently in stock. */

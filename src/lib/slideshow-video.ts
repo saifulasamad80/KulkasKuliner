@@ -12,7 +12,7 @@ const SLIDE_MS = 2800;
 const TRANSITION_MS = 500;
 const FPS = 30;
 
-function loadImage(url: string): Promise<HTMLImageElement> {
+export function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -22,10 +22,26 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
+// MP4 didahulukan: WhatsApp Status & banyak galeri HP nolak/gagal muter .webm.
+// Chrome baru dan Safari bisa rekam MP4; browser lama jatuh ke WebM.
 function pickSupportedMimeType() {
   if (typeof MediaRecorder === "undefined") return "";
-  const candidates = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+  const candidates = [
+    // H.264 dulu: format yang paling pasti diterima WhatsApp & galeri iPhone.
+    "video/mp4;codecs=avc1.42E01E",
+    "video/mp4;codecs=avc1",
+    // MP4 tanpa codec eksplisit: browser bisa memilih VP9 di dalam MP4.
+    "video/mp4",
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+  ];
   return candidates.find((type) => MediaRecorder.isTypeSupported?.(type)) ?? "";
+}
+
+/** Ekstensi file sesuai format yang benar-benar direkam browser. */
+export function getVideoExtension(mimeType: string) {
+  return mimeType.startsWith("video/mp4") ? "mp4" : "webm";
 }
 
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
@@ -101,9 +117,10 @@ function drawBottomInfo(ctx: CanvasRenderingContext2D, title: string, subtitle?:
   titleLines.forEach((line, index) => ctx.fillText(line, 40, y + index * lineHeight));
 
   if (subtitle) {
-    ctx.font = "700 36px sans-serif";
+    // Harga dibuat tebal & besar: ini info yang paling dicari pembeli.
+    ctx.font = "900 46px sans-serif";
     ctx.fillStyle = "#4ade80";
-    ctx.fillText(subtitle, 40, CANVAS_HEIGHT - 60);
+    ctx.fillText(subtitle, 40, CANVAS_HEIGHT - 54);
   }
 }
 

@@ -13,7 +13,7 @@ import {
   selectRotatingProducts,
   type TimeContext,
 } from "@/lib/marketing";
-import { generateSlideshowVideo, type SlideshowProgress } from "@/lib/slideshow-video";
+import { generateSlideshowVideo, getVideoExtension, type SlideshowProgress } from "@/lib/slideshow-video";
 
 type SocialContentGeneratorProps = { products: Product[]; favoriteMenus?: FavoriteMenu[] };
 type ContentMode = "carousel" | "video" | "slideshow";
@@ -205,6 +205,7 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
   const [slideshowStatus, setSlideshowStatus] = useState<"idle" | "loading" | "rendering" | "done" | "error">("idle");
   const [slideshowProgress, setSlideshowProgress] = useState(0);
   const [slideshowVideoUrl, setSlideshowVideoUrl] = useState<string | null>(null);
+  const [slideshowVideoExt, setSlideshowVideoExt] = useState("webm");
   const [slideshowError, setSlideshowError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -266,7 +267,7 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
           subtitle: `Rp ${Number(product.price).toLocaleString("id-ID")}`,
         }));
 
-      const { blob } = await generateSlideshowVideo(
+      const { blob, mimeType } = await generateSlideshowVideo(
         orderedPhotos,
         slideshowCopy.hook,
         slideshowCopy.cta,
@@ -278,6 +279,7 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
       );
 
       setSlideshowVideoUrl(URL.createObjectURL(blob));
+      setSlideshowVideoExt(getVideoExtension(mimeType));
       setSlideshowStatus("done");
     } catch (error) {
       setSlideshowError(error instanceof Error ? error.message : "Video gagal dibuat.");
@@ -466,10 +468,10 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
                   <video src={slideshowVideoUrl} controls loop muted className="w-full max-w-[280px] rounded-xl border border-gray-200 shadow-sm" />
                   <a
                     href={slideshowVideoUrl}
-                    download="kulkaskuliner-slideshow.webm"
+                    download={`kulkaskuliner-slideshow.${slideshowVideoExt}`}
                     className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-purple-700"
                   >
-                    Download Video (.webm)
+                    Download Video (.{slideshowVideoExt})
                   </a>
                 </div>
               )}
@@ -517,7 +519,7 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
           {generatedMode === "carousel" && <div className="mb-5"><p className="mb-3 text-xs font-black uppercase tracking-wider text-purple-800">Preview foto katalog</p>{previewProducts.length > 0 ? <div className="grid grid-cols-3 gap-2">{previewProducts.map((product) => <div key={product.id} className="overflow-hidden rounded-lg border border-gray-200 bg-gray-50">{product.image_url ? <img src={product.image_url} alt={getProductLabel(product)} className="aspect-square w-full object-cover" /> : <div className="flex aspect-square items-center justify-center p-2 text-center text-[10px] font-bold text-gray-400">Belum ada foto</div>}<p className="truncate px-1.5 py-1 text-[10px] font-bold text-gray-700">{getProductLabel(product)}</p></div>)}</div> : <div className="rounded-lg border border-dashed border-orange-300 bg-orange-50 p-3 text-xs leading-5 text-orange-800">Produk aktif belum punya foto. Isi URL foto di bagian Inventori agar carousel bisa langsung dipakai.</div>}</div>}
           <p className="mb-3 text-xs font-black uppercase tracking-wider text-purple-800">Data yang dipakai</p>
           <dl className="space-y-3 text-sm"><div className="flex items-center justify-between gap-3"><dt className="text-gray-500">Produk aktif &amp; ada stok</dt><dd className="font-black text-gray-900">{availableCount}</dd></div><div className="flex items-center justify-between gap-3"><dt className="text-gray-500">Produk aktif + foto</dt><dd className="font-black text-gray-900">{productsWithImagesCount}</dd></div><div className="flex items-center justify-between gap-3"><dt className="text-gray-500">Stok menipis (≤ 5)</dt><dd className={`font-black ${lowStockCount > 0 ? "text-orange-600" : "text-gray-900"}`}>{lowStockCount}</dd></div></dl>
-          <p className="mt-4 border-t border-gray-100 pt-3 text-xs leading-5 text-gray-500">{mode === "carousel" ? "Di HP yang mendukung Web Share, Bagikan Foto + Caption bisa membuka share sheet dengan beberapa foto sekaligus. Kalau nggak didukung, download foto lalu upload manual ke Instagram." : mode === "slideshow" ? "Video dirender di browser—hasilnya file .webm siap didownload dan diupload manual." : "Kalau bikin video nanti, pakai footage original tanpa watermark lalu upload manual ke TikTok dan Instagram Reels."}</p>
+          <p className="mt-4 border-t border-gray-100 pt-3 text-xs leading-5 text-gray-500">{mode === "carousel" ? "Di HP yang mendukung Web Share, Bagikan Foto + Caption bisa membuka share sheet dengan beberapa foto sekaligus. Kalau nggak didukung, download foto lalu upload manual ke Instagram." : mode === "slideshow" ? "Video dirender di browser—hasilnya file video (MP4 kalau browser mendukung) siap didownload dan diupload manual." : "Kalau bikin video nanti, pakai footage original tanpa watermark lalu upload manual ke TikTok dan Instagram Reels."}</p>
         </aside>
       </div>
     </section>

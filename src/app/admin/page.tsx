@@ -12,6 +12,7 @@ import OrdersPanel from '@/components/admin/OrdersPanel';
 import LaporanPanel from '@/components/admin/LaporanPanel';
 import StatistikPanel from '@/components/admin/StatistikPanel';
 import AppSharePromo from '@/components/AppSharePromo';
+import StatusMediaGenerator from '@/components/StatusMediaGenerator';
 import WhatsAppAdGenerator from '@/components/WhatsAppAdGenerator';
 import SocialContentGenerator from '@/components/SocialContentGenerator';
 
@@ -142,6 +143,7 @@ export default function AdminDashboard() {
 
             {activeModule === 'iklan' && (
               <DashboardModule title="Modul Iklan" subtitle="Siapkan materi promosi dari data katalog yang sedang aktif.">
+                <StatusMediaGenerator products={products} favoriteMenus={favoriteMenus} />
                 <AppSharePromo />
                 <WhatsAppAdGenerator products={products} favoriteMenus={favoriteMenus} />
                 <SocialContentGenerator products={products} favoriteMenus={favoriteMenus} />
