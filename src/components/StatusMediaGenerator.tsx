@@ -46,6 +46,16 @@ function getCandidates(products: Product[], favoriteMenus: FavoriteMenu[]) {
   return ordered;
 }
 
+/** Ambil `count` produk acak (Fisher-Yates), supaya kolase harian nggak itu-itu terus. */
+function pickRandom(products: Product[], count: number) {
+  const pool = [...products];
+  for (let i = pool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, count);
+}
+
 function buildCaption() {
   const origin = getSiteOrigin();
   return [
@@ -89,6 +99,18 @@ export default function StatusMediaGenerator({ products, favoriteMenus = [] }: S
       const extra = candidates.filter((product) => !kept.includes(product.id)).slice(0, COLLAGE_MAX_PHOTOS[next] - kept.length);
       return [...kept, ...extra.map((product) => product.id)];
     });
+  };
+
+  const shufflePhotos = () => {
+    setResult(null);
+    setMessage(null);
+    setSelectedIds(pickRandom(candidates, maxPhotos).map((product) => product.id));
+  };
+
+  const resetToBestSellers = () => {
+    setResult(null);
+    setMessage(null);
+    setSelectedIds(candidates.slice(0, maxPhotos).map((product) => product.id));
   };
 
   const togglePhoto = (id: string) => {
@@ -206,9 +228,31 @@ export default function StatusMediaGenerator({ products, favoriteMenus = [] }: S
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-black uppercase tracking-wider text-gray-600">
-            2. Pilih foto ({selectedProducts.length}/{maxPhotos}) — urutan sesuai angka
-          </p>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-black uppercase tracking-wider text-gray-600">
+              2. Pilih foto ({selectedProducts.length}/{maxPhotos}) — urutan sesuai angka
+            </p>
+            {candidates.length > maxPhotos && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={shufflePhotos}
+                  disabled={busy !== null}
+                  className="min-h-10 rounded-lg bg-amber-600 px-3 text-sm font-black text-white transition hover:bg-amber-700 disabled:opacity-50"
+                >
+                  🔀 Acak Foto
+                </button>
+                <button
+                  type="button"
+                  onClick={resetToBestSellers}
+                  disabled={busy !== null}
+                  className="min-h-10 rounded-lg border border-amber-300 bg-white px-3 text-sm font-black text-amber-800 transition hover:bg-amber-50 disabled:opacity-50"
+                >
+                  🏆 Terlaris
+                </button>
+              </div>
+            )}
+          </div>
           {candidates.length === 0 ? (
             <p className="rounded-lg border border-dashed border-orange-300 bg-orange-50 p-3 text-sm text-orange-800">
               Belum ada menu aktif yang punya foto dan stok. Isi foto di Modul Menu dulu.
