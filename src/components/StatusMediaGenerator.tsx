@@ -12,13 +12,16 @@ import {
 } from "@/lib/marketing";
 import { COLLAGE_MAX_PHOTOS, renderCollage, type CollageStyle } from "@/lib/collage-image";
 import { generateSlideshowVideo, getVideoExtension, type SlideshowProgress } from "@/lib/slideshow-video";
+import type { MusicMood } from "@/lib/slideshow-music";
+import SlideshowMusicPicker, { VideoFormatBadge } from "@/components/SlideshowMusicPicker";
 
 type StatusMediaGeneratorProps = {
   products: Product[];
   favoriteMenus?: FavoriteMenu[];
 };
 
-type MediaResult = { url: string; file: File; kind: "image" | "video" };
+type VideoInfo = { whatsappReady: boolean; hasAudio: boolean; videoCodec: string };
+type MediaResult = { url: string; file: File; kind: "image" | "video"; video?: VideoInfo };
 
 function subscribeToNothing() {
   return () => {};
@@ -73,6 +76,8 @@ export default function StatusMediaGenerator({ products, favoriteMenus = [] }: S
   const [result, setResult] = useState<MediaResult | null>(null);
   const [busy, setBusy] = useState<"image" | "video" | null>(null);
   const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState<SlideshowProgress["phase"]>("loading");
+  const [music, setMusic] = useState<MusicMood | null>("ceria");
   const [message, setMessage] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const canShareFiles = useSyncExternalStore(subscribeToNothing, getCanShareFilesSnapshot, getCanShareFilesServerSnapshot);
@@ -146,6 +151,7 @@ export default function StatusMediaGenerator({ products, favoriteMenus = [] }: S
 
   const makeVideo = async () => {
     setBusy("video");
+    setPhase("loading");
     setProgress(0);
     setMessage(null);
     setResult(null);
@@ -157,15 +163,26 @@ export default function StatusMediaGenerator({ products, favoriteMenus = [] }: S
         title: photo.title,
         subtitle: `Rp ${photo.price.toLocaleString("id-ID")}`,
       }));
-      const { blob, mimeType } = await generateSlideshowVideo(photos, hook, "Pesan sekarang di", getSiteOrigin(), (value: SlideshowProgress) => {
-        setProgress(value.ratio);
+      const video = await generateSlideshowVideo(
+        photos,
+        hook,
+        "Pesan sekarang di",
+        getSiteOrigin(),
+        (value: SlideshowProgress) => {
+          setPhase(value.phase);
+          setProgress(value.ratio);
+        },
+        { music }
+      );
+      const extension = getVideoExtension(video.mimeType);
+      const file = new File([video.blob], `kulkaskuliner-status.${extension}`, { type: video.mimeType.split(";")[0] });
+      setResult({
+        url: URL.createObjectURL(video.blob),
+        file,
+        kind: "video",
+        video: { whatsappReady: video.whatsappReady, hasAudio: video.hasAudio, videoCodec: video.videoCodec },
       });
-      const extension = getVideoExtension(mimeType);
-      const file = new File([blob], `kulkaskuliner-status.${extension}`, { type: mimeType.split(";")[0] });
-      setResult({ url: URL.createObjectURL(blob), file, kind: "video" });
-      if (extension === "webm") {
-        setMessage("Browser ini cuma bisa bikin video .webm — WhatsApp kadang nolak format ini. Kalau gagal diunggah ke Status, coba bikin dari Chrome versi terbaru.");
-      }
+      if (video.notes.length > 0) setMessage(video.notes.join(" "));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Video gagal dibuat.");
     } finally {
@@ -284,7 +301,13 @@ export default function StatusMediaGenerator({ products, favoriteMenus = [] }: S
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-black uppercase tracking-wider text-gray-600">3. Buat</p>
+          <p className="mb-2 text-xs font-black uppercase tracking-wider text-gray-600">3. Musik latar (khusus video)</p>
+          <SlideshowMusicPicker value={music} onChange={(next) => { setMusic(next); setResult(null); }} disabled={busy !== null} />
+          <p className="mt-1.5 text-xs text-gray-500">Instrumen buatan sendiri, bebas hak cipta — aman dari mute/take down.</p>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-black uppercase tracking-wider text-gray-600">4. Buat</p>
           <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2">
             <button
               type="button"
@@ -300,7 +323,13 @@ export default function StatusMediaGenerator({ products, favoriteMenus = [] }: S
               disabled={selectedProducts.length === 0 || busy !== null}
               className="min-h-12 rounded-xl bg-gray-900 px-4 text-sm font-black text-white shadow-sm transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {busy === "video" ? `Merekam video… ${Math.round(progress * 100)}%` : "🎬 Buat Video Bertulisan"}
+              {busy === "video"
+                ? phase === "loading"
+                  ? `Memuat foto… ${Math.round(progress * 100)}%`
+                  : phase === "music"
+                    ? "Menyusun musik…"
+                    : `Merender video… ${Math.round(progress * 100)}%`
+                : "🎬 Buat Video Bertulisan"}
             </button>
           </div>
           {busy === "video" && (
@@ -308,7 +337,7 @@ export default function StatusMediaGenerator({ products, favoriteMenus = [] }: S
               <div className="h-full bg-gray-900 transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
             </div>
           )}
-          <p className="mt-2 text-xs text-gray-500">Video ±3 detik per foto. Biarkan layar tetap menyala selama perekaman.</p>
+          <p className="mt-2 text-xs text-gray-500">Video ±3 detik per foto. Jangan pindah aplikasi sampai selesai.</p>
         </div>
 
         {message && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{message}</p>}
@@ -319,7 +348,10 @@ export default function StatusMediaGenerator({ products, favoriteMenus = [] }: S
             {result.kind === "image" ? (
               <img src={result.url} alt="Hasil gambar kolase" className="mx-auto max-h-[520px] w-auto rounded-lg border border-gray-200" />
             ) : (
-              <video src={result.url} controls loop muted playsInline className="mx-auto max-h-[520px] w-auto rounded-lg border border-gray-200" />
+              <>
+                <video src={result.url} controls loop playsInline className="mx-auto max-h-[520px] w-auto rounded-lg border border-gray-200" />
+                {result.video && <VideoFormatBadge {...result.video} />}
+              </>
             )}
             <div className="mt-4 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2">
               {canShareFiles && (

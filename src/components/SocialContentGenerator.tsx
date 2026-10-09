@@ -14,6 +14,8 @@ import {
   type TimeContext,
 } from "@/lib/marketing";
 import { generateSlideshowVideo, getVideoExtension, type SlideshowProgress } from "@/lib/slideshow-video";
+import type { MusicMood } from "@/lib/slideshow-music";
+import SlideshowMusicPicker, { VideoFormatBadge } from "@/components/SlideshowMusicPicker";
 
 type SocialContentGeneratorProps = { products: Product[]; favoriteMenus?: FavoriteMenu[] };
 type ContentMode = "carousel" | "video" | "slideshow";
@@ -202,11 +204,14 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
   const [slideshowCopy, setSlideshowCopy] = useState<{ caption: string; story: string; hook: string; cta: string; catalogUrl: string } | null>(null);
   const [slideshowCandidates, setSlideshowCandidates] = useState<Product[]>([]);
   const [selectedSlideshowIds, setSelectedSlideshowIds] = useState<string[]>([]);
-  const [slideshowStatus, setSlideshowStatus] = useState<"idle" | "loading" | "rendering" | "done" | "error">("idle");
+  const [slideshowStatus, setSlideshowStatus] = useState<"idle" | "loading" | "music" | "rendering" | "done" | "error">("idle");
   const [slideshowProgress, setSlideshowProgress] = useState(0);
   const [slideshowVideoUrl, setSlideshowVideoUrl] = useState<string | null>(null);
   const [slideshowVideoExt, setSlideshowVideoExt] = useState("webm");
   const [slideshowError, setSlideshowError] = useState<string | null>(null);
+  const [slideshowMusic, setSlideshowMusic] = useState<MusicMood | null>("ceria");
+  const [slideshowVideoInfo, setSlideshowVideoInfo] = useState<{ whatsappReady: boolean; hasAudio: boolean; videoCodec: string } | null>(null);
+  const [slideshowNotes, setSlideshowNotes] = useState<string[]>([]);
 
   useEffect(() => {
     return () => {
@@ -254,6 +259,8 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
     setSlideshowStatus("loading");
     setSlideshowProgress(0);
     setSlideshowError(null);
+    setSlideshowVideoInfo(null);
+    setSlideshowNotes([]);
     if (slideshowVideoUrl) URL.revokeObjectURL(slideshowVideoUrl);
     setSlideshowVideoUrl(null);
 
@@ -267,7 +274,7 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
           subtitle: `Rp ${Number(product.price).toLocaleString("id-ID")}`,
         }));
 
-      const { blob, mimeType } = await generateSlideshowVideo(
+      const video = await generateSlideshowVideo(
         orderedPhotos,
         slideshowCopy.hook,
         slideshowCopy.cta,
@@ -275,11 +282,14 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
         (progress: SlideshowProgress) => {
           setSlideshowStatus(progress.phase);
           setSlideshowProgress(progress.ratio);
-        }
+        },
+        { music: slideshowMusic }
       );
 
-      setSlideshowVideoUrl(URL.createObjectURL(blob));
-      setSlideshowVideoExt(getVideoExtension(mimeType));
+      setSlideshowVideoUrl(URL.createObjectURL(video.blob));
+      setSlideshowVideoExt(getVideoExtension(video.mimeType));
+      setSlideshowVideoInfo({ whatsappReady: video.whatsappReady, hasAudio: video.hasAudio, videoCodec: video.videoCodec });
+      setSlideshowNotes(video.notes);
       setSlideshowStatus("done");
     } catch (error) {
       setSlideshowError(error instanceof Error ? error.message : "Video gagal dibuat.");
@@ -442,20 +452,30 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
                 </div>
               )}
 
+              <p className="mb-2 mt-4 text-xs font-black uppercase tracking-wider text-gray-600">Musik latar</p>
+              <SlideshowMusicPicker
+                value={slideshowMusic}
+                onChange={setSlideshowMusic}
+                disabled={slideshowStatus === "loading" || slideshowStatus === "music" || slideshowStatus === "rendering"}
+                accent="purple"
+              />
+
               <button
                 type="button"
                 onClick={() => void buildSlideshow()}
-                disabled={selectedSlideshowIds.length === 0 || slideshowStatus === "loading" || slideshowStatus === "rendering"}
+                disabled={selectedSlideshowIds.length === 0 || slideshowStatus === "loading" || slideshowStatus === "music" || slideshowStatus === "rendering"}
                 className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
               >
                 {slideshowStatus === "loading"
                   ? "Memuat foto…"
-                  : slideshowStatus === "rendering"
+                  : slideshowStatus === "music"
+                    ? "Menyusun musik…"
+                    : slideshowStatus === "rendering"
                     ? `Merender video… ${Math.round(slideshowProgress * 100)}%`
                     : "🎬 Buat Video Slideshow"}
               </button>
 
-              {(slideshowStatus === "loading" || slideshowStatus === "rendering") && (
+              {(slideshowStatus === "loading" || slideshowStatus === "music" || slideshowStatus === "rendering") && (
                 <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
                   <div className="h-full bg-purple-600 transition-all" style={{ width: `${Math.round(slideshowProgress * 100)}%` }} />
                 </div>
@@ -465,7 +485,11 @@ export default function SocialContentGenerator({ products, favoriteMenus = [] }:
 
               {slideshowVideoUrl && (
                 <div className="mt-4">
-                  <video src={slideshowVideoUrl} controls loop muted className="w-full max-w-[280px] rounded-xl border border-gray-200 shadow-sm" />
+                  <video src={slideshowVideoUrl} controls loop playsInline className="w-full max-w-[280px] rounded-xl border border-gray-200 shadow-sm" />
+                  {slideshowVideoInfo && <VideoFormatBadge {...slideshowVideoInfo} />}
+                  {slideshowNotes.length > 0 && (
+                    <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-900">{slideshowNotes.join(" ")}</p>
+                  )}
                   <a
                     href={slideshowVideoUrl}
                     download={`kulkaskuliner-slideshow.${slideshowVideoExt}`}

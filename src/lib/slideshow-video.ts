@@ -1,10 +1,29 @@
+import { renderBackgroundMusic, type MusicMood } from "@/lib/slideshow-music";
+
 export type SlidePhoto = {
   url: string;
   title: string;
   subtitle?: string;
 };
 
-export type SlideshowProgress = { phase: "loading" | "rendering"; ratio: number };
+export type SlideshowProgress = { phase: "loading" | "music" | "rendering"; ratio: number };
+
+export type SlideshowOptions = {
+  /** Musik latar instrumental; `null` = tanpa musik. */
+  music?: MusicMood | null;
+};
+
+export type SlideshowResult = {
+  blob: Blob;
+  mimeType: string;
+  /** Codec video yang benar-benar dipakai, mis. "avc" (H.264) atau "vp9". */
+  videoCodec: string;
+  hasAudio: boolean;
+  /** true kalau H.264 di MP4 standar -- format yang diterima Status WhatsApp. */
+  whatsappReady: boolean;
+  /** Pesan untuk admin kalau ada yang perlu diketahui (mis. musik gagal). */
+  notes: string[];
+};
 
 const CANVAS_WIDTH = 720;
 const CANVAS_HEIGHT = 1280;
@@ -22,26 +41,26 @@ export function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
-// MP4 didahulukan: WhatsApp Status & banyak galeri HP nolak/gagal muter .webm.
-// Chrome baru dan Safari bisa rekam MP4; browser lama jatuh ke WebM.
-function pickSupportedMimeType() {
+// Cadangan untuk browser lama tanpa WebCodecs. Hasilnya MP4 "fragmented"/WebM
+// yang sering ditolak WhatsApp, jadi cuma dipakai kalau terpaksa.
+function pickLegacyMimeType() {
   if (typeof MediaRecorder === "undefined") return "";
-  const candidates = [
-    // H.264 dulu: format yang paling pasti diterima WhatsApp & galeri iPhone.
-    "video/mp4;codecs=avc1.42E01E",
-    "video/mp4;codecs=avc1",
-    // MP4 tanpa codec eksplisit: browser bisa memilih VP9 di dalam MP4.
-    "video/mp4",
-    "video/webm;codecs=vp9",
-    "video/webm;codecs=vp8",
-    "video/webm",
-  ];
+  const candidates = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"];
   return candidates.find((type) => MediaRecorder.isTypeSupported?.(type)) ?? "";
 }
 
-/** Ekstensi file sesuai format yang benar-benar direkam browser. */
+/** Ekstensi file sesuai format yang benar-benar dihasilkan. */
 export function getVideoExtension(mimeType: string) {
   return mimeType.startsWith("video/mp4") ? "mp4" : "webm";
+}
+
+/** Posisi slide & progres crossfade pada waktu `elapsedMs`. */
+function getSlideState(elapsedMs: number, count: number) {
+  const slideIndex = Math.min(count - 1, Math.floor(elapsedMs / SLIDE_MS));
+  const withinSlide = elapsedMs - slideIndex * SLIDE_MS;
+  const transitionStart = SLIDE_MS - TRANSITION_MS;
+  const transitionProgress = withinSlide >= transitionStart ? Math.min(1, (withinSlide - transitionStart) / TRANSITION_MS) : 0;
+  return { slideIndex, transitionProgress };
 }
 
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
@@ -159,24 +178,60 @@ function renderFrame(
 }
 
 /**
- * Renders `photos` into a vertical (9:16) crossfade slideshow video, entirely
- * client-side (no server, no AI API, no cost). Returns a downloadable Blob.
- * Throws with an admin-facing Indonesian message if the browser can't record
- * canvas video (older Safari especially).
+ * Pastikan encoder AAC tersedia. Kalau browser nggak punya AAC bawaan, muat
+ * encoder AAC berbasis WASM (dimuat hanya saat dibutuhkan, ±1 MB).
+ */
+let aacEncoderRegistered = false;
+
+async function hasNativeAacEncoder() {
+  if (typeof AudioEncoder === "undefined") return false;
+  try {
+    const support = await AudioEncoder.isConfigSupported({
+      codec: "mp4a.40.2",
+      sampleRate: 44100,
+      numberOfChannels: 2,
+      bitrate: 192_000,
+    });
+    return support.supported === true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureAacEncoder(mb: typeof import("mediabunny")) {
+  // Cek native langsung, JANGAN lewat mb.canEncodeAudio dulu: hasilnya di-memo,
+  // jadi "false" sebelum register WASM bakal nyangkut terus walau encoder WASM
+  // sudah terdaftar.
+  if (await hasNativeAacEncoder()) return true;
+  if (!aacEncoderRegistered) {
+    try {
+      const { registerAacEncoder } = await import("@mediabunny/aac-encoder");
+      registerAacEncoder();
+      aacEncoderRegistered = true;
+    } catch {
+      return false;
+    }
+  }
+  return mb.canEncodeAudio("aac", { numberOfChannels: 2, sampleRate: 44100, quality: mb.QUALITY_HIGH });
+}
+
+/**
+ * Bikin video slideshow 9:16 (crossfade + teks) di browser, tanpa server.
+ *
+ * Mesin utama: WebCodecs + muxer MP4 (mediabunny). Frame dirender satu per satu
+ * (bukan merekam layar), hasilnya MP4 standar non-fragmented dengan frame rate
+ * tetap -- H.264 + AAC kalau browser mampu, format yang diterima Status WhatsApp.
+ * Browser tanpa WebCodecs jatuh ke MediaRecorder lama (tanpa musik).
  */
 export async function generateSlideshowVideo(
   photos: SlidePhoto[],
   hook: string,
   ctaText: string,
   ctaUrl: string,
-  onProgress?: (progress: SlideshowProgress) => void
-): Promise<{ blob: Blob; mimeType: string }> {
+  onProgress?: (progress: SlideshowProgress) => void,
+  options: SlideshowOptions = {}
+): Promise<SlideshowResult> {
   if (photos.length === 0) throw new Error("Pilih minimal 1 foto dulu.");
-
-  const mimeType = pickSupportedMimeType();
-  if (!mimeType) {
-    throw new Error("Browser ini belum mendukung pembuatan video otomatis. Coba dari Chrome atau Edge terbaru (disarankan Android/desktop).");
-  }
 
   onProgress?.({ phase: "loading", ratio: 0 });
   const images: HTMLImageElement[] = [];
@@ -190,8 +245,126 @@ export async function generateSlideshowVideo(
   canvas.height = CANVAS_HEIGHT;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas nggak didukung di browser ini.");
-  if (typeof canvas.captureStream !== "function") {
-    throw new Error("Browser ini belum mendukung perekaman video dari canvas. Coba dari Chrome atau Edge terbaru.");
+
+  const totalDurationMs = photos.length * SLIDE_MS;
+  const draw = (elapsedMs: number) => {
+    const { slideIndex, transitionProgress } = getSlideState(elapsedMs, photos.length);
+    renderFrame(ctx, images, photos, slideIndex, transitionProgress, hook, ctaText, ctaUrl);
+  };
+
+  // Cukup VideoEncoder. AudioEncoder nggak wajib: AAC bisa lewat encoder WASM
+  // (Safari iPhone lama punya VideoEncoder tapi belum punya AudioEncoder).
+  const hasWebCodecs = typeof VideoEncoder !== "undefined";
+  if (hasWebCodecs) {
+    const mb = await import("mediabunny");
+    const videoCodec = await mb.getFirstEncodableVideoCodec(["avc", "vp9", "av1"], {
+      width: CANVAS_WIDTH,
+      height: CANVAS_HEIGHT,
+      frameRate: FPS,
+    });
+    if (videoCodec) {
+      return encodeWithWebCodecs(mb, videoCodec, canvas, draw, totalDurationMs, onProgress, options);
+    }
+  }
+
+  return recordWithMediaRecorder(canvas, draw, totalDurationMs, onProgress, options);
+}
+
+async function encodeWithWebCodecs(
+  mb: typeof import("mediabunny"),
+  videoCodec: import("mediabunny").VideoCodec,
+  canvas: HTMLCanvasElement,
+  draw: (elapsedMs: number) => void,
+  totalDurationMs: number,
+  onProgress: ((progress: SlideshowProgress) => void) | undefined,
+  options: SlideshowOptions
+): Promise<SlideshowResult> {
+  const notes: string[] = [];
+  const durationSec = totalDurationMs / 1000;
+
+  // Musik dirender dulu (cepat, ±1 detik) supaya video & audio ditulis sekali jalan.
+  let music: AudioBuffer | null = null;
+  if (options.music) {
+    onProgress?.({ phase: "music", ratio: 0 });
+    try {
+      if (await ensureAacEncoder(mb)) {
+        music = await renderBackgroundMusic(options.music, durationSec);
+      } else {
+        notes.push("Browser ini nggak bisa menyimpan audio AAC, jadi video dibuat tanpa musik.");
+      }
+    } catch {
+      notes.push("Musik latar gagal dibuat, jadi video dibuat tanpa musik.");
+    }
+    onProgress?.({ phase: "music", ratio: 1 });
+  }
+
+  const output = new mb.Output({
+    // Metadata di depan file ("fast start"), bukan fragmented -- format MP4 biasa.
+    format: new mb.Mp4OutputFormat({ fastStart: "in-memory" }),
+    target: new mb.BufferTarget(),
+  });
+
+  const videoSource = new mb.CanvasSource(canvas, {
+    codec: videoCodec,
+    quality: mb.QUALITY_HIGH,
+    keyFrameInterval: 2,
+  });
+  output.addVideoTrack(videoSource, { frameRate: FPS });
+
+  let audioSource: InstanceType<typeof mb.AudioBufferSource> | null = null;
+  if (music) {
+    audioSource = new mb.AudioBufferSource({ codec: "aac", quality: mb.QUALITY_HIGH });
+    output.addAudioTrack(audioSource);
+  }
+
+  try {
+    await output.start();
+    if (audioSource && music) await audioSource.add(music);
+
+    const totalFrames = Math.round((totalDurationMs / 1000) * FPS);
+    for (let frame = 0; frame < totalFrames; frame += 1) {
+      const timestamp = frame / FPS;
+      draw(timestamp * 1000);
+      await videoSource.add(timestamp, 1 / FPS);
+      if (frame % 10 === 0) onProgress?.({ phase: "rendering", ratio: frame / totalFrames });
+    }
+
+    await output.finalize();
+  } catch (error) {
+    await output.cancel().catch(() => undefined);
+    throw new Error(`Video gagal dibuat: ${error instanceof Error ? error.message : "kesalahan encoder"}. Coba lagi, atau pakai Chrome terbaru.`);
+  }
+  onProgress?.({ phase: "rendering", ratio: 1 });
+
+  const buffer = output.target.buffer;
+  if (!buffer) throw new Error("Video gagal disimpan. Coba lagi.");
+  const mimeType = await output.getMimeType();
+  const whatsappReady = videoCodec === "avc";
+  if (!whatsappReady) {
+    notes.push("Browser ini nggak bisa bikin video H.264, jadi pakai codec lain — WhatsApp kemungkinan menolak. Bikin ulang dari Chrome terbaru di HP Android/iPhone.");
+  }
+
+  return {
+    blob: new Blob([buffer], { type: "video/mp4" }),
+    mimeType,
+    videoCodec,
+    hasAudio: Boolean(music),
+    whatsappReady,
+    notes,
+  };
+}
+
+/** Jalur lama (browser tanpa WebCodecs): rekam canvas real-time, tanpa musik. */
+async function recordWithMediaRecorder(
+  canvas: HTMLCanvasElement,
+  draw: (elapsedMs: number) => void,
+  totalDurationMs: number,
+  onProgress: ((progress: SlideshowProgress) => void) | undefined,
+  options: SlideshowOptions
+): Promise<SlideshowResult> {
+  const mimeType = pickLegacyMimeType();
+  if (!mimeType || typeof canvas.captureStream !== "function") {
+    throw new Error("Browser ini belum mendukung pembuatan video. Pakai Chrome terbaru di HP Android, atau Safari di iPhone (iOS 16.4 ke atas).");
   }
 
   const stream = canvas.captureStream(FPS);
@@ -200,8 +373,6 @@ export async function generateSlideshowVideo(
   recorder.ondataavailable = (event) => {
     if (event.data.size > 0) chunks.push(event.data);
   };
-
-  const totalDurationMs = photos.length * SLIDE_MS;
   const recordingStopped = new Promise<void>((resolve, reject) => {
     recorder.onstop = () => resolve();
     recorder.onerror = () => reject(new Error("Perekaman video gagal di tengah jalan. Coba lagi."));
@@ -209,32 +380,32 @@ export async function generateSlideshowVideo(
 
   recorder.start();
   const startTime = performance.now();
-
   await new Promise<void>((resolve) => {
     function tick() {
       const elapsed = performance.now() - startTime;
       if (elapsed >= totalDurationMs) {
-        renderFrame(ctx as CanvasRenderingContext2D, images, photos, photos.length - 1, 0, hook, ctaText, ctaUrl);
+        draw(totalDurationMs - 1);
         onProgress?.({ phase: "rendering", ratio: 1 });
         resolve();
         return;
       }
-
-      const slideIndex = Math.min(photos.length - 1, Math.floor(elapsed / SLIDE_MS));
-      const withinSlide = elapsed - slideIndex * SLIDE_MS;
-      const transitionStart = SLIDE_MS - TRANSITION_MS;
-      const transitionProgress = withinSlide >= transitionStart ? (withinSlide - transitionStart) / TRANSITION_MS : 0;
-
-      renderFrame(ctx as CanvasRenderingContext2D, images, photos, slideIndex, transitionProgress, hook, ctaText, ctaUrl);
+      draw(elapsed);
       onProgress?.({ phase: "rendering", ratio: elapsed / totalDurationMs });
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
   });
-
   recorder.stop();
   await recordingStopped;
 
-  const blob = new Blob(chunks, { type: mimeType.split(";")[0] });
-  return { blob, mimeType };
+  const notes = ["Browser ini versi lama, jadi video dibuat dengan cara lama — WhatsApp kemungkinan menolak. Pakai Chrome terbaru di HP."];
+  if (options.music) notes.push("Musik latar nggak didukung di browser ini.");
+  return {
+    blob: new Blob(chunks, { type: mimeType.split(";")[0] }),
+    mimeType,
+    videoCodec: mimeType.includes("avc") ? "avc" : mimeType.includes("vp9") ? "vp9" : mimeType.startsWith("video/webm") ? "WebM" : "MP4 lama",
+    hasAudio: false,
+    whatsappReady: false,
+    notes,
+  };
 }
